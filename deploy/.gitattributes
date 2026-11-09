@@ -1,0 +1,2 @@
+# File di folder ini dijalankan/dibaca di Linux: selalu LF, juga saat di-checkout di Windows.
+* text eol=lf

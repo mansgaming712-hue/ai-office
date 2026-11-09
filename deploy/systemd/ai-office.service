@@ -1,0 +1,85 @@
+# AI Office: server Node (UI dist/, API /api/*, WebSocket /ws) di 127.0.0.1:3000.
+# Dipasang oleh deploy/setup-vps.sh ke /etc/systemd/system/ai-office.service.
+# Diakses publik HANYA lewat Nginx (HTTPS). Rahasia ada di /etc/ai-office/ai-office.env (600, root).
+#
+# Cek di VPS:  sudo systemd-analyze verify /etc/systemd/system/ai-office.service
+#              sudo systemd-analyze security ai-office
+# Log:         journalctl -u ai-office -f
+
+[Unit]
+Description=AI Office (animasi kantor + API event + WebSocket)
+Documentation=file:///opt/ai-office/current/docs/DEPLOY.md
+After=network-online.target
+Wants=network-online.target
+# Kalau gagal start 5 kali dalam 5 menit (mis. token di file env kurang dari 32 karakter),
+# systemd berhenti mencoba supaya kesalahannya terlihat di `systemctl status ai-office`.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=aioffice
+Group=aioffice
+WorkingDirectory=/opt/ai-office/current
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=3000
+# Berisi AI_OFFICE_TOKEN, AI_OFFICE_ALLOWED_HOSTS, AI_OFFICE_TRUST_PROXY (opsional:
+# AI_OFFICE_LOG_MESSAGES=1 untuk mencatat isi pesan event di log; default hanya metadata).
+# Catatan: nilai di file ini MENIMPA Environment= di atas, jadi jangan menaruh HOST/PORT di sana.
+EnvironmentFile=/etc/ai-office/ai-office.env
+ExecStart=/usr/bin/node /opt/ai-office/current/server/index.js
+Restart=always
+RestartSec=5
+TimeoutStopSec=15
+SyslogIdentifier=ai-office
+
+# --- Batas sumber daya (dirancang untuk VPS 1 GB RAM) ----------------------------------
+# App kecil: riwayat maksimal 300 event di memori, pemakaian normal jauh di bawah 100 MB.
+# MemoryHigh: di atas ini kernel menekan (reclaim) memori app supaya VPS tetap responsif.
+# MemoryMax : batas keras; bila terlewati, app dihentikan kernel (OOM) lalu Restart=always
+#             menyalakannya lagi. Nginx, SSH, dan sistem tetap punya sisa RAM.
+# TasksMax  : batas proses/thread (Node biasanya 10-15 thread). Mencegah ledakan proses.
+# Build npm (update.sh) TIDAK berjalan di service ini, jadi tidak terkena batas di atas.
+# Cek pemakaian: systemctl status ai-office (baris Memory dan Tasks).
+MemoryHigh=256M
+MemoryMax=384M
+TasksMax=64
+
+# --- Hardening -------------------------------------------------------------
+# App hanya membaca kode dan mendengar di 127.0.0.1:3000; tidak menulis file apa pun
+# (riwayat event hanya di memori), jadi seluruh sistem file dibuat read-only. Log app ditulis
+# ke stdout/stderr lalu disimpan journald (isi dan retensinya: docs/DEPLOY.md bagian 9).
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+RemoveIPC=yes
+UMask=0077
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+# Jaringan hanya ke/dari localhost (Nginx). App tidak butuh koneksi keluar.
+IPAddressDeny=any
+IPAddressAllow=localhost
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+# System call yang diblokir mengembalikan EPERM, bukan membunuh proses.
+SystemCallErrorNumber=EPERM
+# MemoryDenyWriteExecute sengaja TIDAK dipakai: JIT V8 (Node.js) butuh memori W+X.
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,21 @@
+node_modules/
+dist/
+*.log
+logs/
+data/
+
+# Rahasia dan konfigurasi lokal: jangan pernah di-commit.
+.env
+.env.*
+!.env.example
+.claude/settings.local.json
+*.bak-*
+*.pem
+*.key
+
+# Konfigurasi pribadi (contohnya ada di limit-config.example.json).
+limit-config.json
+
+# Laporan internal manajer ke CEO (berisi path dan detail mesin lokal).
+reports/*
+!reports/.gitkeep

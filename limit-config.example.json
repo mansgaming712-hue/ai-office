@@ -1,0 +1,7 @@
+{
+  "weeklyTokenLimit": 0,
+  "weekResetDay": null,
+  "weekResetHour": 0,
+  "countCacheRead": false,
+  "_catatan": "Salin ke limit-config.json lalu isi angkanya. weeklyTokenLimit: perkiraan batas token per minggu (0 = tanpa batas, bar tidak punya batas). weekResetDay: hari reset 0-6 (0 = Minggu, 1 = Senin, ... 6 = Sabtu) atau null untuk window bergulir 7 hari. weekResetHour: jam reset 0-23 (waktu lokal komputer ini). countCacheRead: true bila token cache read ikut dihitung di angka mingguan. Semua angka hanya ESTIMASI dari log lokal Claude Code, bukan angka resmi."
+}
