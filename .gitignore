@@ -8,7 +8,11 @@ data/
 .env
 .env.*
 !.env.example
-.claude/settings.local.json
+# .claude/: hanya dua file konfigurasi bersama yang boleh ikut; sisanya (settings.local.json,
+# worktree, cache, catatan lokal) selalu diabaikan.
+.claude/*
+!.claude/settings.json
+!.claude/launch.json
 *.bak-*
 *.pem
 *.key
