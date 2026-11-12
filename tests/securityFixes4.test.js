@@ -38,7 +38,10 @@ const FORBIDDEN_IN_MESSAGE =
 
 let dir;
 beforeAll(() => {
-  dir = mkdtempSync(join(tmpdir(), 'aio-sec4-'));
+  // macOS: tmpdir() memuat segmen acak (/var/folders/xx/<30 karakter acak>/T) yang sengaja dianggap
+  // berbentuk token oleh looksLikePath, sehingga path-nya tidak dicetak. Test ini butuh path wajar, jadi
+  // di macOS dipakai /tmp (tanpa segmen acak).
+  dir = mkdtempSync(join(process.platform === 'darwin' ? '/tmp' : tmpdir(), 'aio-sec4-'));
   mkdirSync(join(dir, 'static', 'assets'), { recursive: true });
   writeFileSync(join(dir, 'static', 'index.html'), '<!doctype html><title>AI Office</title>');
   writeFileSync(join(dir, 'static', 'assets', 'app-abc123.js'), 'console.log(1);');
