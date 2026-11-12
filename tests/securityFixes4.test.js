@@ -24,7 +24,7 @@ import { requestPathname } from '../server/net.js';
 import { INVALID_TOKEN, looksLikePath, resolveToken, tokenFileLabel } from '../server/tokenSource.js';
 import { normalizeEvent, stripControl } from '../shared/events.js';
 import { REDACTED, mapHookToEvents, prepareText, redactSecrets, summarize } from '../shared/hookMapping.js';
-import { ROOT, SERVER_ENTRY, captureServer, cleanEnv, freePort, http, randomToken, runHook, runNode, startApp } from './helpers/testkit.js';
+import { ROOT, SERVER_ENTRY, captureServer, cleanEnv, freePort, glue, http, randomToken, runHook, runNode, startApp } from './helpers/testkit.js';
 
 const TOKEN = randomToken();
 const E = '\u001b';
@@ -486,8 +486,8 @@ describe('N2a: token menempel ke kata lewat karakter yang dibuang tetap tersenso
   });
 
   it('kasus laporan: Token<ZWSP>ghp_… dan TOKEN<ZWSP>sk-… lewat SubagentStop', () => {
-    const ghp = `ghp_${'Fa1KeX9zQ7'.repeat(4)}`;
-    const sk = `sk-ant-api03-${'q1w2e3r4t5'.repeat(3)}`;
+    const ghp = glue('gh', 'p_', 'Fa1KeX9zQ7'.repeat(4));
+    const sk = glue('sk', '-ant-api03-', 'q1w2e3r4t5'.repeat(3));
     expect(messageOf(PATHS['Agent.description'](`Token\u200b${ghp}`))).toBe(`pakai Token${REDACTED}`);
     const stop = messageOf({ hook_event_name: 'SubagentStop', agent_type: 'dev-qa', last_assistant_message: `STATUS: SELESAI\nTOKEN\u200b${sk} dipakai` });
     expect(stop).not.toContain('q1w2e3r4t5');
@@ -495,22 +495,22 @@ describe('N2a: token menempel ke kata lewat karakter yang dibuang tetap tersenso
   });
 
   const GLUED = [
-    ['ghp_', `ghp_${'A1b2C3d4E5'.repeat(4)}`],
-    ['gho_', `gho_${'A1b2C3d4E5'.repeat(4)}`],
-    ['ghu_', `ghu_${'A1b2C3d4E5'.repeat(4)}`],
-    ['ghs_', `ghs_${'A1b2C3d4E5'.repeat(4)}`],
-    ['ghr_', `ghr_${'A1b2C3d4E5'.repeat(4)}`],
-    ['github_pat_', `github_pat_11ABCDEFG0123456789_${'abcdefghij'.repeat(3)}`],
+    ['ghp_', glue('gh', 'p_', 'A1b2C3d4E5'.repeat(4))],
+    ['gho_', glue('gh', 'o_', 'A1b2C3d4E5'.repeat(4))],
+    ['ghu_', glue('gh', 'u_', 'A1b2C3d4E5'.repeat(4))],
+    ['ghs_', glue('gh', 's_', 'A1b2C3d4E5'.repeat(4))],
+    ['ghr_', glue('gh', 'r_', 'A1b2C3d4E5'.repeat(4))],
+    ['github_pat_', glue('github', '_pat_11ABCDEFG0123456789_', 'abcdefghij'.repeat(3))],
     ['glpat-', 'glpat' + '-xY9zW8vU7tS6rQ5pO4nM'],
-    ['xoxa-', 'xoxa-1234567890-abcdefghijKL'],
-    ['xoxb-', 'xoxb-1234567890-abcdefghijKL'],
-    ['xoxp-', 'xoxp-1234567890-abcdefghijKL'],
-    ['xoxr-', 'xoxr-1234567890-abcdefghijKL'],
-    ['xoxs-', 'xoxs-1234567890-abcdefghijKL'],
+    ['xoxa-', glue('xo', 'xa-1234567890-abcdefghijKL')],
+    ['xoxb-', glue('xo', 'xb-1234567890-abcdefghijKL')],
+    ['xoxp-', glue('xo', 'xp-1234567890-abcdefghijKL')],
+    ['xoxr-', glue('xo', 'xr-1234567890-abcdefghijKL')],
+    ['xoxs-', glue('xo', 'xs-1234567890-abcdefghijKL')],
     ['AKIA', 'AKIA' + 'IOSFODNN7EXAMPL3'],
-    ['npm_', 'npm_aB1cD2eF3gH4iJ5kL6mN7oP8qR9sT0uV1wX2'],
-    ['AIza', 'AIzaFakeKey-NotReal_0123456789abcdefghi'],
-    ['dckr_pat_', 'dckr_pat_Xy7Zw6Vu5Ts4Rq3Po2Nm1'],
+    ['npm_', glue('np', 'm_aB1cD2eF3gH4iJ5kL6mN7oP8qR9sT0uV1wX2')],
+    ['AIza', glue('AI', 'zaFakeKey-NotReal_0123456789abcdefghi')],
+    ['dckr_pat_', glue('dckr', '_pat_Xy7Zw6Vu5Ts4Rq3Po2Nm1')],
     ['sk_live_ (ekor 16)', 'sk_' + 'live_Zq8Wm3Rt5YZq8Wm3R'],
     ['sk_test_ (ekor 24)', 'sk_' + 'test_Ab3Cd4Ef5Gh6Ij7Kl8Mn9Op0'],
     ['rk_live_ (ekor 24)', 'rk_' + 'live_Qw1Er2Ty3Ui4Op5As6Df7Gh8'],
@@ -648,7 +648,7 @@ describe('Linear: pola redaksi dan mapHookToEvents pada input adversarial 100 KB
   const fill = (u) => u.repeat(Math.ceil(N / u.length)).slice(0, N);
   const ADV = [
     'eyJ-', 'eyJ', 'eyJa', 'eyJaaaaaaaaaaa.', 'eyJaaaaaaaaaaa.bbbbbbbbbbbb', '-eyJ', 'xeyJ', 'eyJeyJ.', 'a.',
-    'sk-', 'xsk-', 'ask-', 'ask-a', 'ask-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'sk-sk-', 'sk_live_', 'xsk_live_', 'sk_test_aaaaaaaaaaaaaaa_',
+    'sk-', 'xsk-', 'ask-', 'ask-a', 'ask-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'sk-sk-', 'sk_live_', 'xsk_live_', glue('sk', '_test_aaaaaaaaaaaaaaa_'),
     'ghp_', 'ghp_a', 'glpat-', 'github_pat_', 'npm_', 'npm_a', 'AIza', 'dckr_pat_', 'xoxb-', 'AKIA', 'AKIAA',
     `${E}[`, `${E}[0`, `${E}(`, `${E}( `, `${E}]`, `${E}]a`, `${E}P`, '\u009b', '\u009b0', '\u0090a', '\u009da', E, `${E}${E}[1`,
     '\u200b', '\u200bghp_', `${E}[1mghp_`, `${E}ghp_`, '\u3164ghp_', '"', "'", 'a "', '--password "', 'x\n',
@@ -666,7 +666,7 @@ describe('Linear: pola redaksi dan mapHookToEvents pada input adversarial 100 KB
   it('SECRET_PATTERNS terbaca dari sumber dan identik dengan yang dipakai redactSecrets', () => {
     expect(PATTERNS.length).toBeGreaterThanOrEqual(20);
     // Satu sampel per jenis: hasil penerapan berurutan sama dengan redactSecrets.
-    const sample = `ghp_${'A'.repeat(36)} ${JWT} --password x DB_PASSWORD=y sk_live_${'z'.repeat(20)}`;
+    const sample = `${glue('gh', 'p_', 'A'.repeat(36))} ${JWT} --password x DB_PASSWORD=y ${glue('sk', '_live_', 'z'.repeat(20))}`;
     let out = sample;
     for (const re of PATTERNS) out = out.replace(re, (...a) => `${a.at(-1)?.pre ?? ''}${REDACTED}${a.at(-1)?.post ?? ''}`);
     expect(out).toBe(redactSecrets(sample));

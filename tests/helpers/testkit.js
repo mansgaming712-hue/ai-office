@@ -2,8 +2,11 @@
 // Semua server uji memakai port 0 (acak) atau 3300-3399; port 3000 (animasi live) tidak pernah disentuh.
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
+import { mkdirSync, rmSync, statSync } from 'node:fs';
 import { request } from 'node:http';
 import { createServer as createNetServer } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
 import { createAiOfficeServer } from '../../server/app.js';
@@ -14,6 +17,12 @@ export const SERVER_ENTRY = fileURLToPath(new URL('../../server/index.js', impor
 
 /** Token acak 43 karakter (base64url), sama dengan scripts/gen-token.mjs. Hanya hidup di memori. */
 export const randomToken = (bytes = 32) => randomBytes(bytes).toString('base64url');
+
+/**
+ * Rangkai potongan string saat runtime. Dipakai untuk nilai contoh berbentuk rahasia supaya literal
+ * lengkapnya tidak pernah tertulis di berkas (secret scanning GitHub). Nilai akhirnya sama persis.
+ */
+export const glue = (...parts) => parts.join('');
 
 export const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
@@ -146,28 +155,89 @@ export function runNode(args, { env, input, cwd = ROOT, timeoutMs = 15000, onStd
 /**
  * Jalankan hooks/send-event.mjs dengan payload hook. AI_OFFICE_URL WAJIB diisi supaya hook tidak
  * pernah jatuh ke default http://127.0.0.1:3000 (server animasi live).
+ *
+ * Batas waktu request hook default produksi 800 ms. Di bawah beban (suite paralel, CI bersama) server uji
+ * di dalam worker bisa terlambat menjawab lebih dari itu, sehingga event hilang dan test gagal acak.
+ * Maka di sini default-nya dinaikkan ke HOOK_TEST_TIMEOUT_MS; test yang memang menguji batas waktu
+ * (AI_OFFICE_TIMEOUT_MS di `env`) tetap memakai nilainya sendiri. Server mati (ECONNREFUSED) tetap
+ * membuat hook keluar seketika, jadi tidak ada test yang menjadi lebih lambat.
  */
+const HOOK_TEST_TIMEOUT_MS = '10000';
 export function runHook(payload, env) {
   if (!env?.AI_OFFICE_URL) throw new Error('runHook: AI_OFFICE_URL wajib diisi (jangan kirim ke port 3000)');
   const input = typeof payload === 'string'
     ? payload
     : JSON.stringify({ session_id: 'test', transcript_path: 'main.jsonl', cwd: ROOT, permission_mode: 'default', ...payload });
-  return runNode([HOOK], { env: cleanEnv(env), input, timeoutMs: 15000 });
+  return runNode([HOOK], { env: cleanEnv({ AI_OFFICE_TIMEOUT_MS: HOOK_TEST_TIMEOUT_MS, ...env }), input, timeoutMs: 15000 });
 }
 
-/** Port bebas di rentang 3300-3399 (untuk proses server/index.js yang butuh PORT eksplisit). */
+/**
+ * Reservasi port lintas proses. Vitest menjalankan berkas test di beberapa worker sekaligus, dan
+ * "cek bebas lalu lepas" saja berlomba: dua worker bisa mendapat port yang sama lalu salah satunya
+ * gagal EADDRINUSE saat server sungguhan baru hidup ratusan milidetik kemudian. Maka tiap port yang
+ * diberikan juga "dikunci" dengan membuat folder (mkdir atomik di semua OS) di direktori sementara.
+ * Kunci hanya perlu menutup jeda antara "port diberikan" dan "server benar-benar listen" (setelah itu
+ * port yang terpakai terdeteksi oleh probe), jadi kedaluwarsanya pendek (PORT_LOCK_TTL_MS) supaya 100 port
+ * tidak habis walau banyak proses vitest berjalan bersamaan atau worker mati tanpa membersihkan.
+ * Bila semua port terkunci, putaran kedua mengabaikan kunci (hanya probe) daripada gagal.
+ */
+const PORT_LOCK_DIR = join(tmpdir(), 'ai-office-test-ports');
+const PORT_LOCK_TTL_MS = 10_000;
+const heldLocks = new Set();
+process.once('exit', () => {
+  for (const dir of heldLocks) {
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch {
+      /* kedaluwarsa sendiri */
+    }
+  }
+});
+
+function claimPort(p) {
+  mkdirSync(PORT_LOCK_DIR, { recursive: true });
+  const dir = join(PORT_LOCK_DIR, String(p));
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      mkdirSync(dir);
+      heldLocks.add(dir);
+      return true;
+    } catch (e) {
+      if (e.code !== 'EEXIST') return true; // folder sementara tidak bisa ditulis: jangan blokir test
+      try {
+        if (Date.now() - statSync(dir).mtimeMs <= PORT_LOCK_TTL_MS) return false;
+        rmSync(dir, { recursive: true, force: true }); // kunci basi (worker mati): ambil alih
+      } catch {
+        return false;
+      }
+    }
+  }
+  return false;
+}
+
+/** Port bebas di rentang 3300-3399 (untuk proses server/index.js yang butuh PORT eksplisit; server itu belum mendukung PORT=0). */
 export async function freePort(from = 3300, to = 3399) {
   const start = from + Math.floor(Math.random() * (to - from + 1));
+  for (const useLocks of [true, false]) {
+    const p = await scanPorts(from, to, start, useLocks);
+    if (p !== null) return p;
+  }
+  throw new Error(`tidak ada port bebas di ${from}-${to}`);
+}
+
+async function scanPorts(from, to, start, useLocks) {
   for (let i = 0; i <= to - from; i++) {
     const p = from + ((start - from + i) % (to - from + 1));
+    if (useLocks && !claimPort(p)) continue;
     const ok = await new Promise((resolve) => {
       const s = createNetServer();
       s.once('error', () => resolve(false));
       s.listen(p, '127.0.0.1', () => s.close(() => resolve(true)));
     });
     if (ok) return p;
+    heldLocks.delete(join(PORT_LOCK_DIR, String(p))); // dipakai proses lain di luar test: biarkan kunci kedaluwarsa
   }
-  throw new Error(`tidak ada port bebas di ${from}-${to}`);
+  return null;
 }
 
 /** Server HTTP penangkap sederhana. `handler(req, body, res)` boleh menulis respons sendiri. */

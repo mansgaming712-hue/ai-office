@@ -16,7 +16,7 @@ import { describe, expect, it } from 'vitest';
 import { requestPathname } from '../server/net.js';
 import { stripControl } from '../shared/events.js';
 import { REDACTED, mapHookToEvents, redactSecrets } from '../shared/hookMapping.js';
-import { SERVER_ENTRY, cleanEnv, freePort, http, randomToken, runNode, startApp } from './helpers/testkit.js';
+import { SERVER_ENTRY, cleanEnv, freePort, http, glue, randomToken, runNode, startApp } from './helpers/testkit.js';
 
 const E = '\u001b';
 
@@ -108,7 +108,7 @@ function randomAlnum(n = 24) {
 // ------------------------------------------------------------------------------------------- L-2
 describe('L-2: sk-/pk-/rk- menempel ke kata sebelumnya tersensor bila nilainya tampak acak', () => {
   it('kasus laporan: "pakai a_sk-ant-api03-…" → "pakai a_[disembunyikan]" (redactSecrets, Agent/Bash description)', () => {
-    const text = 'pakai a_sk-ant-api03-q1w2e3r4t5y6u7i8o9p0asdfghjkl';
+    const text = glue('pakai a_sk', '-ant-api03-q1w2e3r4t5y6u7i8o9p0asdfghjkl');
     expect(redactSecrets(text)).toBe(`pakai a_${REDACTED}`);
     expect(agentDesc(text)).toBe(`pakai a_${REDACTED}`);
     expect(bashDesc(text)).toBe(`Bash · pakai a_${REDACTED}`);
@@ -121,12 +121,12 @@ describe('L-2: sk-/pk-/rk- menempel ke kata sebelumnya tersensor bila nilainya t
   // [label, kata di depan (dipertahankan), rahasia (disensor), ekor rahasia untuk cek bocor]
   const r = { proj: randomAlnum(24), pk: randomAlnum(20), tok: randomAlnum(24), rk: randomAlnum(20) };
   const CASES = [
-    ['OPENAI_KEY_sk-proj- (contoh tetap)', 'OPENAI_KEY_', 'sk-proj-A1b2C3d4E5f6G7h8I9j0K1l2', 'A1b2C3d4E5f6G7h8I9j0K1l2'],
-    ['OPENAI_KEY_sk-proj- (acak)', 'OPENAI_KEY_', `sk-proj-${r.proj}`, r.proj],
+    ['OPENAI_KEY_sk-proj- (contoh tetap)', 'OPENAI_KEY_', glue('sk', '-proj-A1b2C3d4E5f6G7h8I9j0K1l2'), 'A1b2C3d4E5f6G7h8I9j0K1l2'],
+    ['OPENAI_KEY_sk-proj- (acak)', 'OPENAI_KEY_', glue('sk', '-proj-', r.proj), r.proj],
     ['my_pk-live… (acak)', 'my_', `pk-live${r.pk}`, r.pk],
-    ['Tokensk-proj-… (acak)', 'Token', `sk-proj-${r.tok}`, r.tok],
+    ['Tokensk-proj-… (acak)', 'Token', glue('sk', '-proj-', r.tok), r.tok],
     ['x_rk-… (acak)', 'x_', `rk-${r.rk}`, r.rk],
-    ['a_sk-ant-api03-… (contoh tetap)', 'a_', 'sk-ant-api03-q1w2e3r4t5y6u7i8o9p0asdfghjkl', 'q1w2e3r4t5y6u7i8o9p0asdfghjkl'],
+    ['a_sk-ant-api03-… (contoh tetap)', 'a_', glue('sk', '-ant-api03-q1w2e3r4t5y6u7i8o9p0asdfghjkl'), 'q1w2e3r4t5y6u7i8o9p0asdfghjkl'],
   ];
 
   it.each(CASES)('%s: redactSecrets → kata + [disembunyikan]', (_label, word, secret) => {
@@ -199,8 +199,8 @@ describe('L-2: tanpa false positive pada nama kebab-case / snake_case biasa', ()
 
 // ------------------------------------------------------------------------------------------- L-1
 const L1_TOKENS = [
-  ['ghp_', 'ghp_Fa1KeX9zQ7Fa1KeX9zQ7Fa1KeX9zQ7Fa1KeX9zQ7', 'Fa1KeX9zQ7Fa1KeX9zQ7Fa1KeX9zQ7Fa1KeX9zQ7'],
-  ['AIza', 'AIzaFakeKey-NotReal_0123456789abcdefghi', 'FakeKey-NotReal_0123456789abcdefghi'],
+  ['ghp_', glue('gh', 'p_Fa1KeX9zQ7Fa1KeX9zQ7Fa1KeX9zQ7Fa1KeX9zQ7'), 'Fa1KeX9zQ7Fa1KeX9zQ7Fa1KeX9zQ7Fa1KeX9zQ7'],
+  ['AIza', glue('AI', 'zaFakeKey-NotReal_0123456789abcdefghi'), 'FakeKey-NotReal_0123456789abcdefghi'],
   ['AKIA', 'AKIA' + 'IOSFODNN7EXAMPL3', 'IOSFODNN7EXAMPL3'],
 ];
 const L1_INSERTS = [

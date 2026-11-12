@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAiOfficeServer } from '../server/app.js';
 import { MAX_SESSION_COOKIES, resolveAuthMode } from '../server/auth.js';
-import { JSON_HEADERS, cookieFrom, http, login, randomToken, startApp, wsClosed, wsConnect } from './helpers/testkit.js';
+import { JSON_HEADERS, cookieFrom, glue, http, login, randomToken, startApp, wsClosed, wsConnect } from './helpers/testkit.js';
 
 const TOKEN = randomToken();
 const BEARER = { Authorization: `Bearer ${TOKEN}` };
@@ -194,7 +194,7 @@ describe('S1: klien yang tidak menyelesaikan penutupan dibuang server dalam ~2 d
 
 // ------------------------------------------------------------------------------------------- S3
 describe('S3: log event default hanya metadata, isi pesan hanya dengan logMessages', () => {
-  const secretMsg = `Bash · psql postgres://admin:${randomToken(12)}@db.internal/prod`;
+  const secretMsg = glue('Bash · psql postgres://', 'admin:', randomToken(12), '@db.internal/prod');
   const batch = [
     { type: 'working', from: 'dev-backend', to: 'manager', message: secretMsg },
     { type: 'assign', from: 'manager', to: 'dev-qa' },

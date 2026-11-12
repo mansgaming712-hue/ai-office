@@ -4,6 +4,7 @@ import {
   redactSecrets, safeName, summarize,
 } from '../shared/hookMapping.js';
 import { DEMO_STEPS, officeUrlFrom } from '../scripts/demo-hooks.mjs';
+import { glue } from './helpers/testkit.js';
 
 const common = { session_id: 's1', transcript_path: 't.jsonl', cwd: '/x', permission_mode: 'default' };
 const map = (input) => mapHookToEvents({ ...common, ...input });
@@ -95,7 +96,7 @@ describe('mapHookToEvents', () => {
 
 describe('helper', () => {
   it('redactSecrets menyembunyikan token umum', () => {
-    const out = redactSecrets('curl -H "Authorization: Bearer abcdefghijklmnop123" API_KEY=sk-1234567890abcdefXYZ password: hunter2 ghp_abcdefghijklmnopqrstuvwxyz0123');
+    const out = redactSecrets(`curl -H "Authorization: Bearer abcdefghijklmnop123" API_KEY=${glue('sk', '-1234567890abcdefXYZ')} password: hunter2 ${glue('gh', 'p_abcdefghijklmnopqrstuvwxyz0123')}`);
     expect(out).not.toMatch(/abcdefghijklmnop123|sk-1234567890|hunter2|ghp_abc/);
     expect(out).toContain('[disembunyikan]');
     expect(redactSecrets('npm test')).toBe('npm test');
@@ -221,20 +222,20 @@ const fake = (n) => 'Fa1KeX9zQ7'.repeat(Math.ceil(n / 10)).slice(0, n);
 const JWT_SIG = fake(43);
 const SECRET_CASES = [
   // [label, teks, bagian rahasia yang tidak boleh tersisa]
-  ['GitHub ghp_', `git remote set-url origin x; export GH=ghp_${fake(36)}`, fake(36)],
-  ['GitHub fine-grained github_pat_', `pakai github_pat_${fake(22)}_${fake(59)}`, fake(22)],
-  ['Stripe sk_live_', `stripe sk_live_${fake(24)}`, fake(24)],
-  ['Stripe sk_test_', `curl https://api.stripe.com -u sk_test_${fake(24)}:`, fake(24)],
-  ['GitLab glpat-', `token glpat-${fake(20)}`, fake(20)],
-  ['npm npm_', `npm config set //registry.npmjs.org/:_authToken npm_${fake(36)}`, fake(36)],
-  ['Google AIza', `gcloud key AIza${fake(35)}`, fake(35)],
-  ['Docker dckr_pat_', `echo dckr_pat_${fake(27)} | docker login`, fake(27)],
-  ['AWS AKIA', 'aws id AKIAFAKE0KEY1FAKE2ID', 'FAKE0KEY1FAKE2ID'],
-  ['JWT', `cookie jwt=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJxYS10ZXN0In0.${JWT_SIG}`, JWT_SIG],
+  ['GitHub ghp_', `git remote set-url origin x; export GH=${glue('gh', 'p_', fake(36))}`, fake(36)],
+  ['GitHub fine-grained github_pat_', `pakai ${glue('github', '_pat_', fake(22))}_${fake(59)}`, fake(22)],
+  ['Stripe sk_live_', `stripe ${glue('sk', '_live_', fake(24))}`, fake(24)],
+  ['Stripe sk_test_', `curl https://api.stripe.com -u ${glue('sk', '_test_', fake(24))}:`, fake(24)],
+  ['GitLab glpat-', `token ${glue('glp', 'at-', fake(20))}`, fake(20)],
+  ['npm npm_', `npm config set //registry.npmjs.org/:_authToken ${glue('np', 'm_', fake(36))}`, fake(36)],
+  ['Google AIza', `gcloud key ${glue('AI', 'za', fake(35))}`, fake(35)],
+  ['Docker dckr_pat_', `echo ${glue('dckr', '_pat_', fake(27))} | docker login`, fake(27)],
+  ['AWS AKIA', glue('aws id AK', 'IAFAKE0KEY1FAKE2ID'), 'FAKE0KEY1FAKE2ID'],
+  ['JWT', `cookie jwt=${glue('ey', 'JhbGciOiJIUzI1NiJ9.', 'ey', 'JzdWIiOiJxYS10ZXN0In0.')}${JWT_SIG}`, JWT_SIG],
   ['Authorization: Bearer', `curl -H "Authorization: Bearer ${fake(32)}" https://api.example.com`, fake(32)],
   ['bearer di prosa', `pakai bearer ${fake(32)} untuk API`, fake(32)],
-  ['://user:pass@', `psql postgres://admin:${fake(14)}@db.internal:5432/prod`, fake(14)],
-  ['://token@', `git clone https://${fake(30)}@github.com/x/y.git`, fake(30)],
+  ['://user:pass@', glue('psql postgres://', 'admin:', fake(14), '@db.internal:5432/prod'), fake(14)],
+  ['://token@', glue('git clone https://', fake(30), '@github.com/x/y.git'), fake(30)],
   ['AWS_SECRET_ACCESS_KEY=', `export AWS_SECRET_ACCESS_KEY=${fake(40)}`, fake(40)],
   ['SESSION_KEY=', `heroku config:set SESSION_KEY=${fake(32)}`, fake(32)],
   ['--password x', `tool --password ${fake(12)}`, fake(12)],
@@ -246,8 +247,8 @@ const SECRET_CASES = [
   ['sshpass -p', `sshpass -p ${fake(12)} ssh root@203.0.113.10`, fake(12)],
   ['curl -u a:b', `curl -u admin:${fake(12)} https://x.example`, fake(12)],
   ['curl --user a:b', `curl --user admin:${fake(12)} https://x.example`, fake(12)],
-  ['blok PRIVATE KEY lengkap', `kunci:\n-----BEGIN RSA PRIVATE KEY-----\n${fake(64)}\n${fake(40)}\n-----END RSA PRIVATE KEY-----\nselesai`, fake(40)],
-  ['blok PRIVATE KEY tanpa END', `-----BEGIN OPENSSH PRIVATE KEY-----\n${fake(70)} (terpotong)`, fake(70)],
+  ['blok PRIVATE KEY lengkap', `kunci:\n${glue('-----BEG', 'IN RSA PRIVATE KEY-----')}\n${fake(64)}\n${fake(40)}\n-----END RSA PRIVATE KEY-----\nselesai`, fake(40)],
+  ['blok PRIVATE KEY tanpa END', `${glue('-----BEG', 'IN OPENSSH PRIVATE KEY-----')}\n${fake(70)} (terpotong)`, fake(70)],
 ];
 
 describe('S2: redactSecrets menyensor pola rahasia, di semua jalur pesan', () => {
@@ -273,7 +274,7 @@ describe('S2: redactSecrets menyensor pola rahasia, di semua jalur pesan', () =>
   });
 
   it('bagian yang bukan rahasia dipertahankan (pre/post): ://[disembunyikan]@host, mysql -p, --password', () => {
-    expect(redactSecrets(`psql postgres://admin:${fake(14)}@db.internal/prod`)).toBe(`psql postgres://${REDACTED}@db.internal/prod`);
+    expect(redactSecrets(glue('psql postgres://', 'admin:', fake(14), '@db.internal/prod'))).toBe(`psql postgres://${REDACTED}@db.internal/prod`);
     expect(redactSecrets(`mysql -u root -p${fake(12)} prod`)).toBe(`mysql -u root -p${REDACTED} prod`);
     expect(redactSecrets(`tool --password=${fake(12)} --verbose`)).toBe(`tool --password=${REDACTED} --verbose`);
   });
@@ -306,7 +307,7 @@ describe('S2: tanpa false positive', () => {
 
 describe('S2: summarize meredaksi SEBELUM markdown dibuang', () => {
   it('ghp_ tidak lolos walau "_" lalu dibuang', () => {
-    const out = summarize(`STATUS: SELESAI\nRingkasan: repo dipush dengan ghp_${fake(36)} tadi`);
+    const out = summarize(`STATUS: SELESAI\nRingkasan: repo dipush dengan ${glue("gh", "p_", fake(36))} tadi`);
     expect(out).toBe(`repo dipush dengan ${REDACTED} tadi`);
     expect(out).not.toMatch(/ghp|Fa1Ke/);
   });
@@ -319,7 +320,7 @@ describe('S2: summarize meredaksi SEBELUM markdown dibuang', () => {
   });
 
   it('blok kunci privat multi-baris di awal laporan tidak bocor sebaris pun', () => {
-    const out = summarize(`STATUS: SELESAI\n-----BEGIN EC PRIVATE KEY-----\n${fake(60)}\n-----END EC PRIVATE KEY-----\nKunci dipasang`);
+    const out = summarize(`STATUS: SELESAI\n${glue('-----BEG', 'IN EC PRIVATE KEY-----')}\n${fake(60)}\n-----END EC PRIVATE KEY-----\nKunci dipasang`);
     expect(out).toBe(REDACTED);
   });
 });
@@ -337,7 +338,7 @@ describe('S2: describeTool mengirim data seminimal mungkin', () => {
     ['PowerShell tanpa description → nama program', 'PowerShell', { command: '& "C:\\tools\\gh.exe" auth status' }, 'PowerShell · gh.exe'],
     ['PowerShell $env:X=.. → nama tool saja', 'PowerShell', { command: `$env:AI_OFFICE_TOKEN="${fake(43)}"; npm run demo:hooks` }, 'PowerShell'],
     ['PowerShell + description', 'PowerShell', { command: 'Get-ChildItem', description: 'Daftar file' }, 'PowerShell · Daftar file'],
-    ['Grep: pola dan path tidak ikut', 'Grep', { pattern: `sk_live_${fake(20)}`, path: 'src/klien-rahasia' }, 'Grep'],
+    ['Grep: pola dan path tidak ikut', 'Grep', { pattern: glue('sk', '_live_', fake(20)), path: 'src/klien-rahasia' }, 'Grep'],
     ['Glob: pola tidak ikut', 'Glob', { pattern: '**/*.secret' }, 'Glob'],
     ['WebSearch: kueri tidak ikut', 'WebSearch', { query: 'harga domain klien rahasia' }, 'WebSearch'],
     ['WebFetch: host saja (tanpa user:pass, path, query, hash)', 'WebFetch', { url: `https://user:${fake(12)}@docs.example.com/a/b?token=${fake(12)}#x` }, 'WebFetch · docs.example.com'],
@@ -380,8 +381,8 @@ describe('S2: pesan assign = description, atau baris pertama prompt setelah reda
   });
 
   it('rahasia di baris pertama prompt tersensor; blok kunci privat di awal prompt tidak bocor', () => {
-    expect(assignMessage({ prompt: `Token: ghp_${fake(36)}\nlain` })).toBe(`Token: ${REDACTED}`);
-    const key = assignMessage({ prompt: `-----BEGIN EC PRIVATE KEY-----\n${fake(60)}\n-----END EC PRIVATE KEY-----\nPasang kunci di server` });
+    expect(assignMessage({ prompt: `Token: ${glue("gh", "p_", fake(36))}\nlain` })).toBe(`Token: ${REDACTED}`);
+    const key = assignMessage({ prompt: `${glue('-----BEG', 'IN EC PRIVATE KEY-----')}\n${fake(60)}\n-----END EC PRIVATE KEY-----\nPasang kunci di server` });
     expect(key).toBe(REDACTED);
   });
 
@@ -402,7 +403,7 @@ describe('S2: teks adversarial 100 KB selesai cepat (tanpa backtracking berlebih
     ['TOKEN TOKEN', 'TOKEN '.repeat(17_000)],
     ['password x', 'password x '.repeat(9_000)],
     ['kata sandi', 'kata sandi '.repeat(9_000)],
-    ['-----BEGIN', '-----BEGIN RSA PRIVATE KEY-----'.repeat(3_300)],
+    ['-----BEGIN', glue('-----BEG', 'IN RSA PRIVATE KEY-----').repeat(3_300)],
     ['bearer', 'bearer '.repeat(15_000)],
     ['x polos', 'x'.repeat(100_000)],
   ])('%s', (_label, text) => {
@@ -423,7 +424,7 @@ describe('officeUrlFrom (alamat animasi yang dicetak demo-hooks)', () => {
     ['', 'http://localhost:3000'],
     ['https://office.example.com/api/events', 'https://office.example.com'],
     ['https://office.example.com/api/events/', 'https://office.example.com'],
-    ['https://user:pass@office.example.com/kantor/api/events?x=1#y', 'https://office.example.com/kantor'],
+    [glue('https://', 'user:pass', '@office.example.com/kantor/api/events?x=1#y'), 'https://office.example.com/kantor'],
     ['http://127.0.0.1:3305/api/events', 'http://127.0.0.1:3305'],
     ['bukan url', null],
     ['ftp://office.example.com/api/events', null],

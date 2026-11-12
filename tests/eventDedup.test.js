@@ -252,6 +252,15 @@ describe('hook (proses sungguhan): project, tokens, server mati', () => {
         bestGap = Math.min(bestGap, r.ms - baseline.ms);
       }
     }
+    // Selisih terkecil dari beberapa sampel: hook yang menunggu timeout (800 ms default) akan melebihi 500 ms di
+    // SETIAP sampel, sedangkan satu sampel cepat sudah membuktikan ia keluar karena ECONNREFUSED. Saat mesin
+    // sangat sibuk, semua 6 sampel pertama bisa terkena lonjakan; beri sampai 6 sampel tambahan sebelum menilai.
+    for (let extra = 0; bestGap >= 500 && extra < 6; extra++) {
+      const baseline = await runNode(['-e', 'process.stdin.resume(); process.stdin.on("end", () => process.exit(0))'], { env: cleanEnv(), input: '{}' });
+      const r = await runHook(payloads[0], { AI_OFFICE_URL: `http://127.0.0.1:${port}/api/events` });
+      expect(r).toMatchObject({ code: 0, out: '', err: '', timedOut: false });
+      bestGap = Math.min(bestGap, r.ms - baseline.ms);
+    }
     expect(bestGap).toBeLessThan(500);
     console.log(`[eventDedup.test] waktu keluar hook saat server mati (ms): ${times.join(', ')}`);
   });

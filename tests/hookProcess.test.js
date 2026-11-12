@@ -358,18 +358,23 @@ describe('alur realistis (realisticSteps dan demo-hooks --asli) lewat hook sungg
   }, 30000);
 
   it('node scripts/demo-hooks.mjs --asli --fast: exit 0, event sesuai, folder sementara dihapus, token tidak tercetak', async () => {
-    const demoDirs = () => readdirSync(tmpdir()).filter((n) => n.startsWith('ai-office-demo-')).sort();
+    // Folder sementara pribadi (TMPDIR di POSIX, TEMP/TMP di Windows): daftar folder demo tidak terganggu
+    // proses lain (mis. dua `npm test` bersamaan atau demo-hooks yang dijalankan manusia) yang memakai tmpdir() sistem.
+    const privateTmp = mkdtempSync(join(tmpdir(), 'aio-demo-tmp-'));
+    const demoDirs = () => readdirSync(privateTmp).filter((n) => n.startsWith('ai-office-demo-')).sort();
     const dirsBefore = demoDirs();
     const before = s.app.history.length;
     const r = await runNode(['scripts/demo-hooks.mjs', '--asli', '--fast'], {
-      env: cleanEnv({ AI_OFFICE_URL: url, AI_OFFICE_TOKEN: TOKEN }),
+      env: cleanEnv({ AI_OFFICE_URL: url, AI_OFFICE_TOKEN: TOKEN, TMPDIR: privateTmp, TEMP: privateTmp, TMP: privateTmp }),
       timeoutMs: 30000,
     });
     expect(r.code).toBe(0);
     expect(r.out).toMatch(/12\. SubagentStop \(dev-devops\) → exit 0/);
     expect(r.out + r.err).not.toContain(TOKEN);
     expect(s.app.history.slice(before).map((e) => e.type)).toEqual(EXPECTED);
-    expect(demoDirs()).toEqual(dirsBefore);
+    const dirsAfter = demoDirs();
+    rmSync(privateTmp, { recursive: true, force: true });
+    expect(dirsAfter).toEqual(dirsBefore);
   }, 30000);
 });
 

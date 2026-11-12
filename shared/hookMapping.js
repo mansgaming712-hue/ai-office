@@ -37,7 +37,7 @@ const SECRET_NAME = String.raw`(?:SECRET|TOKEN|PASSWORD|PASSWD|PWD|API[_-]?KEY|A
 const SECRET_PATTERNS = [
   // Blok kunci privat PEM/OpenSSH/PGP sampai baris END (atau sampai akhir teks bila END tidak ada).
   /-----BEGIN [A-Z0-9 ]{0,40}PRIVATE KEY(?: BLOCK)?-----[\s\S]*?(?:-----END [A-Z0-9 ]{0,40}PRIVATE KEY(?: BLOCK)?-----|$)/g,
-  // Kredensial di URL: scheme://user:pass@host atau scheme://token@host → ://[disembunyikan]@host
+  // Kredensial di URL: scheme://<user>:<pass>@host atau scheme://<token>@host → ://[disembunyikan]@host
   /(?<pre>:\/\/)[^\s\/?#@:]{1,256}(?::[^\s@]{0,256})?(?<post>@)/g,
   // Format token yang dikenal. Prefiks yang khas TIDAK butuh batas kata (\b): setelah karakter tak
   // terlihat dibuang, token bisa menempel ke kata sebelumnya ("Token<ZWSP>ghp_…" → "Tokenghp_…").
@@ -50,9 +50,9 @@ const SECRET_PATTERNS = [
   //   - setelah batas kata: nilai ≥ 12 karakter;
   //   - menempel ke kata sebelumnya (huruf, angka, atau "_": "a_sk-…", "OPENAI_KEY_sk-…", "mysk-…"): hanya
   //     bila nilainya tampak acak, yaitu dalam paling banyak 5 segmen pertama (dipisah "-" atau "_") ada satu segmen
-  //     ≥ 16 alfanumerik yang memuat huruf DAN angka ("sk-ant-api03-q1w2…", "pk-live9a8b…"). Nama kebab-case
+  //     ≥ 16 alfanumerik yang memuat huruf DAN angka ("sk-ant-api03-…", "pk-live9a8b…"). Nama kebab-case
   //     biasa ("task-runner-configuration-v2", "desk-top-layout-2024-final") tidak punya segmen seperti itu.
-  //     Segmen acak sesudah "_" juga ("mysk-ant-api03-Ab_cD3eF4…", "xsk-Q7_w8E9r0…").
+  //     Segmen acak sesudah "_" juga ("mysk-ant-api03-Ab…", "xsk-Q7_w8E9r0…").
   //     Linear: setiap segmen dibatasi "-"/"_", lookahead berhenti di akhir segmen, dan satu segmen hanya bisa
   //     dicapai dari ≤ 5 awal "sk-" sebelumnya.
   /\b(?:sk|pk|rk)-[A-Za-z0-9_-]{12,}|(?:sk|pk|rk)-(?:[A-Za-z0-9]+[-_]){0,4}(?=[A-Za-z]*[0-9])(?=[0-9]*[A-Za-z])[A-Za-z0-9]{16,}[A-Za-z0-9_-]*/g,
