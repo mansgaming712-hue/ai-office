@@ -9,9 +9,9 @@ import { ROOT } from './helpers/testkit.js';
 const read = (p) => readFileSync(join(ROOT, p), 'utf8');
 
 describe('nodeVersion: pembanding', () => {
-  it('minimal 20.12.0 dan sama dengan engines.node di package.json', () => {
-    expect(MIN_NODE).toBe('20.12.0');
-    expect(JSON.parse(read('package.json')).engines.node).toBe('>=20.12');
+  it('minimal 22.12.0 dan sama dengan engines.node di package.json', () => {
+    expect(MIN_NODE).toBe('22.12.0');
+    expect(JSON.parse(read('package.json')).engines.node).toBe('>=22.12');
   });
 
   it.each([
@@ -19,12 +19,15 @@ describe('nodeVersion: pembanding', () => {
     ['v18.19.0', false],
     ['20.11.1', false],
     ['20.0.0', false],
-    ['20.12.0', true],
-    ['v20.12.0', true],
-    ['20.12.1', true],
-    ['20.19.0', true],
-    ['22.x', true],
-    ['22.0.0', true],
+    ['20.12.0', false],
+    ['20.19.0', false],
+    ['22.x', false],
+    ['22.0.0', false],
+    ['22.11.0', false],
+    ['22.12.0', true],
+    ['v22.12.0', true],
+    ['22.12.1', true],
+    ['23.0.0', true],
     ['24.x', true],
     ['24.19.0', true],
     ['100.0.0', true],
@@ -53,10 +56,10 @@ describe('nodeVersion: pembanding', () => {
   });
 
   it('nodeVersionProblem: null bila cukup; bila kurang memuat versi sekarang, minimal, dan cara upgrade', () => {
-    expect(nodeVersionProblem('20.12.0')).toBeNull();
-    const msg = nodeVersionProblem('v18.19.0');
-    expect(msg).toContain('20.12');
-    expect(msg).toContain('v18.19.0');
+    expect(nodeVersionProblem('22.12.0')).toBeNull();
+    const msg = nodeVersionProblem('v20.19.0');
+    expect(msg).toContain('22.12');
+    expect(msg).toContain('v20.19.0');
     expect(msg).toMatch(/nodejs\.org/);
     expect(msg).toMatch(/upgrade/i);
   });
@@ -104,38 +107,13 @@ describe('nodeVersion: titik masuk', () => {
   });
 });
 
-// Toolchain dev (vite/vitest) butuh Node lebih baru daripada runtime: dicek oleh prebuild dan pretest.
-describe('nodeVersion: toolchain build dan test', () => {
-  it.each([
-    ['18.19.0', 'build', false],
-    ['20.12.0', 'build', false],
-    ['20.18.3', 'build', false],
-    ['20.19.0', 'build', true],
-    ['21.7.0', 'build', false],
-    ['22.11.0', 'build', false],
-    ['22.12.0', 'build', true],
-    ['24.19.0', 'build', true],
-    ['20.19.0', 'test', false],
-    ['22.11.0', 'test', false],
-    ['22.12.0', 'test', true],
-    ['24.0.0', 'test', true],
-    ['bukan-versi', 'build', true],
-  ])('Node %s untuk %s -> %s', async (version, kind, ok) => {
-    const { isToolchainNodeSupported, toolchainNodeProblem } = await import('../server/nodeVersion.js');
-    expect(isToolchainNodeSupported(version, kind)).toBe(ok);
-    const problem = toolchainNodeProblem(version, kind);
-    if (ok) expect(problem).toBeNull();
-    else {
-      expect(problem).toContain(`v${version}`);
-      expect(problem).toMatch(kind === 'test' ? /22\.12/ : /20\.19/);
-      expect(problem).toMatch(/20\.12/); // menjelaskan bahwa runtime sendiri cukup 20.12
-    }
-  });
-
-  it('package.json menjalankan cek toolchain sebelum build dan test', () => {
+// prebuild/pretest memakai cek versi yang sama (satu angka minimum untuk semuanya).
+describe('nodeVersion: cek sebelum build dan test', () => {
+  it('package.json menjalankan cek versi sebelum build dan test', () => {
     const scripts = JSON.parse(read('package.json')).scripts;
     expect(scripts.prebuild).toBe('node scripts/check-toolchain-node.mjs build');
     expect(scripts.pretest).toBe('node scripts/check-toolchain-node.mjs test');
+    expect(firstImportOf(read('scripts/check-toolchain-node.mjs'))).toBe("import '../server/requireNode.js';");
   });
 
   it('skrip cek lolos tanpa output di Node yang menjalankan test ini', () => {
@@ -145,4 +123,12 @@ describe('nodeVersion: toolchain build dan test', () => {
       expect(r.stdout + r.stderr).toBe('');
     }
   });
+
+  it('tidak ada lagi tingkat versi terpisah untuk runtime dan toolchain', async () => {
+    const mod = await import('../server/nodeVersion.js');
+    expect(mod.toolchainNodeProblem).toBeUndefined();
+    expect(mod.isToolchainNodeSupported).toBeUndefined();
+  });
 });
+
+const firstImportOf = (text) => /^import\s.*$/m.exec(text)?.[0] ?? '';

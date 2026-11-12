@@ -42,13 +42,10 @@ The UI text, server messages, and agent definitions are written in Indonesian. T
 
 | Need | Version | Notes |
 | --- | --- | --- |
-| Node.js for the server and hooks | 20.12 or newer | Checked by `server/requireNode.js`. Older versions print a message and exit with code 1. |
-| Node.js for `npm run build` and `npm start` | 20.19 or newer in the 20.x line, or 22.12 or newer | Vite 8 needs this. `npm start` runs the build first. |
-| Node.js for `npm test` | 22.12 or newer | Vitest 5 needs this. |
+| Node.js | 22.12 or newer | One minimum for everything: server, hooks, build, and tests. Checked by `server/requireNode.js` (also before `npm run build` and `npm test`). Older versions print a message and exit with code 1. |
 | npm | comes with Node.js | |
 | Claude Code (`claude` CLI) | any recent version | Only needed for real delegation. Simulation does not need it. |
 
-**Recommendation:** install Node.js 22.12 or a newer LTS release. That version covers all of the rows above.
 Check your version with `node -v`.
 
 ## Install
@@ -205,8 +202,7 @@ Copy-Item .env.example .env
 - Variables that already exist in the environment (shell, systemd, or the `env` section of Claude Code's
   `settings.json`) are **not** overwritten by `.env` (see `server/loadEnv.js`).
 - The server and the hook (`hooks/send-event.mjs`) both read `.env` from the project folder.
-- Loading `.env` uses `process.loadEnvFile`, which exists from Node 20.12. On older Node versions, `.env` is
-  silently skipped.
+- Loading `.env` uses Node's built-in `process.loadEnvFile`, so no extra package is needed.
 - The full list of variables is in [Environment variables](#environment-variables).
 
 ### `limit-config.json` (optional)
@@ -539,7 +535,7 @@ npm run agents:validate        # check the agent files
 ```
 
 CI (`.github/workflows/ci.yml`) runs the build and tests on Ubuntu, Windows, and macOS with Node 22.12 and the
-current LTS. It also runs the production install, the smoke test, and an autostart dry run on Node 20.12.
+current LTS. The actions are pinned to commit SHAs.
 
 ## Project structure
 

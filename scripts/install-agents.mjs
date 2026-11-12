@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Salin agents/*.md dari repo ke ~/.claude/agents.
 // File yang sudah ada dan isinya berbeda TIDAK ditimpa, kecuali pakai --force.
-import '../server/requireNode.js'; // paling awal: cek versi Node (minimal 20.12)
+import '../server/requireNode.js'; // paling awal: cek versi Node (minimal 22.12)
 import { copyFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { REPO_AGENTS_DIR, USER_AGENTS_DIR, readAgentDir } from './agent-files.mjs';

@@ -1,6 +1,6 @@
 // Pembanding versi Node. SENGAJA hanya memakai sintaks lama (var, fungsi biasa, tanpa ?. atau ??),
 // supaya modul ini tetap bisa dimuat di Node tua dan sempat mencetak pesan yang jelas.
-export var MIN_NODE = '20.12.0';
+export var MIN_NODE = '22.12.0';
 
 /** "v20.12.0" / "20.12" / "22.x" -> [20, 12, 0]; null bila tidak bisa dibaca. Bagian yang hilang atau "x" dianggap 0. */
 export function parseVersion(text) {
@@ -27,30 +27,6 @@ export function compareVersions(a, b) {
 export function isNodeSupported(version, min) {
   var c = compareVersions(version, min || MIN_NODE);
   return c === null ? true : c >= 0;
-}
-
-/**
- * Toolchain dev lebih baru daripada runtime: build UI (vite 8) butuh Node ^20.19 atau >=22.12,
- * test (vitest 5) butuh Node >=22.12. `kind` = 'build' atau 'test'.
- * Versi yang tidak bisa dibaca dianggap cukup (tidak memblokir).
- */
-export function isToolchainNodeSupported(version, kind) {
-  var v = parseVersion(version);
-  if (!v) return true;
-  if (kind !== 'test' && v[0] === 20) return compareVersions(version, '20.19.0') >= 0;
-  return compareVersions(version, '22.12.0') >= 0;
-}
-
-/** Pesan galat untuk `npm run build` / `npm test` di Node yang terlalu lama, atau null bila cukup. */
-export function toolchainNodeProblem(version, kind) {
-  if (isToolchainNodeSupported(version, kind)) return null;
-  var what = kind === 'test' ? 'Menjalankan test (vitest)' : 'Build UI (vite)';
-  var need = kind === 'test' ? 'Node.js 22.12 atau lebih baru' : 'Node.js 20.19 (seri 20) atau 22.12 dan lebih baru';
-  return (
-    what + ' membutuhkan ' + need + ', tetapi yang terpasang v' + String(version).replace(/^v/, '') + '.\n' +
-    'Server dan hook AI Office sendiri cukup dengan Node.js 20.12, tetapi alat build dan test butuh versi lebih baru.\n' +
-    'Pasang Node.js LTS terbaru dari https://nodejs.org (atau lewat nvm, fnm, Volta), lalu buka terminal baru.'
-  );
 }
 
 /** Pesan galat untuk pengguna (bahasa Indonesia), atau null bila versinya cukup. */

@@ -42,13 +42,10 @@ Teks UI, pesan server, dan definisi agen memakai bahasa Indonesia. Terjemahan sa
 
 | Kebutuhan | Versi | Keterangan |
 | --- | --- | --- |
-| Node.js untuk server dan hooks | 20.12 atau lebih baru | Dicek oleh `server/requireNode.js`. Versi lebih lama menampilkan pesan lalu keluar dengan kode 1. |
-| Node.js untuk `npm run build` dan `npm start` | 20.19 atau lebih baru di seri 20.x, atau 22.12 atau lebih baru | Dibutuhkan Vite 8. `npm start` menjalankan build lebih dulu. |
-| Node.js untuk `npm test` | 22.12 atau lebih baru | Dibutuhkan Vitest 5. |
+| Node.js | 22.12 atau lebih baru | Satu angka minimal untuk semuanya: server, hooks, build, dan test. Dicek oleh `server/requireNode.js` (juga sebelum `npm run build` dan `npm test`). Versi lebih lama menampilkan pesan lalu keluar dengan kode 1. |
 | npm | ikut terpasang bersama Node.js | |
 | Claude Code (CLI `claude`) | versi terbaru yang wajar | Hanya untuk delegasi sungguhan. Mode simulasi tidak membutuhkannya. |
 
-**Rekomendasi:** pasang Node.js 22.12 atau LTS yang lebih baru. Versi itu memenuhi semua baris di atas.
 Cek versimu dengan `node -v`.
 
 ## Install
@@ -203,8 +200,7 @@ Copy-Item .env.example .env
 - Variabel yang sudah ada di environment (shell, systemd, atau bagian `env` di `settings.json` Claude Code) **tidak**
   ditimpa oleh `.env` (lihat `server/loadEnv.js`).
 - Server dan hook (`hooks/send-event.mjs`) sama-sama membaca `.env` dari folder proyek.
-- Pemuatan `.env` memakai `process.loadEnvFile`, yang tersedia mulai Node 20.12. Di Node yang lebih lama, `.env`
-  dilewati diam-diam.
+- Pemuatan `.env` memakai `process.loadEnvFile` bawaan Node, jadi tidak butuh paket tambahan.
 - Daftar lengkap variabel ada di [Variabel lingkungan](#variabel-lingkungan).
 
 ### `limit-config.json` (opsional)
@@ -527,7 +523,7 @@ npm run agents:validate        # cek file agen
 ```
 
 CI (`.github/workflows/ci.yml`) menjalankan build dan test di Ubuntu, Windows, dan macOS dengan Node 22.12 dan LTS
-terbaru. Di Node 20.12 juga dijalankan instalasi produksi, smoke test, dan autostart dry-run.
+terbaru. Action-nya dipin ke SHA commit.
 
 ## Struktur proyek
 

@@ -34,35 +34,32 @@ describe('ci.yml', () => {
     const j = wf.jobs.test;
     expect(j.strategy['fail-fast']).toBe(false);
     expect([...j.strategy.matrix.os].sort()).toEqual(THREE_OS);
-    expect(j.strategy.matrix.node).toContain('lts/*');
-    // vitest 5 butuh Node ^22.12 atau ^24; Node 20.12 hanya untuk runtime (job runtime-min).
-    expect(j.strategy.matrix.node).toContain('22.12');
+    // Node minimum satu angka untuk semuanya: 22.12 (sama dengan engines.node).
+    expect([...j.strategy.matrix.node].sort()).toEqual(['22.12', 'lts/*']);
     expect(j['timeout-minutes']).toBeGreaterThan(0);
+  });
+
+  it('hanya satu job (test); tidak ada lagi job runtime-min Node 20.12', () => {
+    expect(Object.keys(wf.jobs)).toEqual(['test']);
+    expect(WF_TEXT).not.toMatch(/20\.12|runtime-min/);
   });
 
   it('job test: checkout, setup-node dengan cache npm, lalu npm ci, build, test', () => {
     const uses = steps('test').map((s) => s.uses).filter(Boolean);
-    expect(uses[0]).toMatch(/^actions\/checkout@v\d+$/);
-    expect(uses[1]).toMatch(/^actions\/setup-node@v\d+$/);
+    expect(uses[0]).toMatch(/^actions\/checkout@[0-9a-f]{40}$/);
+    expect(uses[1]).toMatch(/^actions\/setup-node@[0-9a-f]{40}$/);
     const setup = steps('test').find((s) => /setup-node/.test(s.uses ?? ''));
     expect(setup.with.cache).toBe('npm');
     expect(runs('test')).toEqual(['npm ci', 'npm run build', 'npm test']);
   });
 
-  it('job runtime-min: Node 20.12 di 3 OS, hanya dependensi produksi + smoke', () => {
-    const j = wf.jobs['runtime-min'];
-    expect(j.strategy['fail-fast']).toBe(false);
-    expect([...j.strategy.matrix.os].sort()).toEqual(THREE_OS);
-    expect(j['timeout-minutes']).toBeGreaterThan(0);
-    expect(steps('runtime-min').find((s) => /setup-node/.test(s.uses ?? '')).with['node-version']).toBe('20.12');
-    expect(runs('runtime-min')).toContain('npm ci --omit=dev');
-    expect(runs('runtime-min')).toContain('npm run smoke');
-  });
-
-  it('semua action memakai versi mayor (tidak @master/@main), tanpa kredensial git tersimpan', () => {
+  it('semua action dipin ke SHA commit 40 karakter dengan komentar tag, tanpa kredensial git tersimpan', () => {
+    for (const line of WF_TEXT.split('\n').filter((l) => /^\s*uses:/.test(l))) {
+      expect(line).toMatch(/uses: actions\/[\w-]+@[0-9a-f]{40} # v\d+/);
+    }
     for (const j of Object.values(wf.jobs)) {
       for (const s of j.steps) {
-        if (s.uses) expect(s.uses).toMatch(/^actions\/[\w-]+@v\d+$/);
+        if (s.uses) expect(s.uses).toMatch(/^actions\/[\w-]+@[0-9a-f]{40}$/);
       }
       const co = j.steps.find((s) => /checkout/.test(s.uses ?? ''));
       expect(co.with['persist-credentials']).toBe(false);

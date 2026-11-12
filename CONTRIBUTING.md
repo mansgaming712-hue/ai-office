@@ -15,7 +15,7 @@ Please keep that style for new text in the same area. Translations of the docume
 
 ## Set up your environment
 
-You need Node.js 22.12 or newer (the test runner needs it; see [Requirements](README.md#requirements)).
+You need Node.js 22.12 or newer (see [Requirements](README.md#requirements)).
 
 ```bash
 git clone https://github.com/<your-user>/ai-office.git
