@@ -5,19 +5,23 @@ import {
   CELL, DOOR, H, MANAGER_SPOT, W, obstacles, otherSeat, rosterSeats,
 } from './layout.js';
 import { createGrid, findPath } from './pathfinding.js';
+import { STATUS_LABEL as UI_LABEL, uiStatusOf } from '../agentStatus.js';
+import { advanceAlongPath, nextSpeed, remainingLength } from '../motion.js';
 import { projectOf } from '../sessions.js';
 import { WARNING_TEXT } from '../usage.js';
 
-export const STATUS_LABEL = {
-  idle: 'idle',
-  working: 'bekerja',
-  done: 'selesai',
-  blocked: 'butuh bantuan',
-};
+// Label per status internal engine (idle/working/done/blocked), memakai model status UI
+// (idle/bekerja/selesai/error) dari src/agentStatus.js.
+export const STATUS_LABEL = Object.fromEntries(
+  ['idle', 'working', 'done', 'blocked'].map((k) => [k, UI_LABEL[uiStatusOf(k)]]),
+);
 
 export const TUNING = {
   walkSpeed: 105, // piksel logis per detik
   rushSpeed: 140, // saat antrean tugas panjang
+  accel: 520, // piksel/detik^2: ease-in saat mulai berjalan
+  decel: 620, // ease-out menjelang tujuan
+  minSpeed: 16,
   standUp: 0.3,
   envelopeDedupe: 3, // detik: done+report beruntun dari worker yang sama = satu amplop
   deferredGap: 0.6,
@@ -45,6 +49,7 @@ export class Office {
 
   reset() {
     this.time = 0;
+    this.reducedMotion = this.reducedMotion ?? false;
     this.workers = new Map();
     this.otherCount = 0;
     for (const name of AGENT_NAMES) this.#addWorker(name, this.seats.get(name), false);
@@ -59,6 +64,7 @@ export class Office {
       job: null,
       timer: 0,
       walkDist: 0,
+      speed: 0,
       bubble: null,
       typingUntil: 0,
     };
@@ -75,6 +81,8 @@ export class Office {
 
   #addWorker(name, station, dynamic) {
     const h = hash(name);
+    const office = this;
+    let status = 'idle';
     this.workers.set(name, {
       name,
       division: station.division,
@@ -83,7 +91,16 @@ export class Office {
       front: station.front,
       hit: station.hit,
       dynamic,
-      status: 'idle',
+      // Setiap perubahan status mencatat waktunya (statusSince) supaya renderer bisa menganimasikan penandanya.
+      get status() {
+        return status;
+      },
+      set status(next) {
+        if (next === status) return;
+        status = next;
+        this.statusSince = office.time;
+      },
+      statusSince: -Infinity,
       bubble: null,
       pending: 0,
       deferred: [],
@@ -114,6 +131,11 @@ export class Office {
     const b = { text, kind, born: this.time, until: this.time + seconds };
     if (project) b.project = project;
     return b;
+  }
+
+  /** Preferensi reduced motion: amplop terbang lurus (tanpa lengkung). Info tetap sama. */
+  setReducedMotion(on) {
+    this.reducedMotion = Boolean(on);
   }
 
   /** Nyalakan/matikan peringatan "limit hampir habis" di karakter manajer. */
@@ -267,7 +289,7 @@ export class Office {
   // ---------------------------------------------------------------- update
 
   update(dt) {
-    dt = clamp(dt, 0, 0.1); // tab yang tertidur tidak membuat lompatan besar
+    dt = Number.isFinite(dt) ? clamp(dt, 0, 0.1) : 0; // tab yang tertidur tidak membuat lompatan besar; NaN diabaikan
     this.time += dt;
     this.#updateManager(dt);
     this.#updateEnvelopes(dt);
@@ -290,6 +312,7 @@ export class Office {
   #walkTo(target) {
     const m = this.manager;
     m.path = findPath(this.grid, { x: m.x, y: m.y }, target) ?? [{ ...target }];
+    if (m.state !== 'walking') m.speed = 0; // ganti tujuan saat berjalan: kecepatan dipertahankan
     m.state = 'walking';
   }
 
@@ -335,28 +358,25 @@ export class Office {
           // Sedang kembali ke meja tapi ada tugas baru: langsung berangkat lagi.
           this.#startNextJob();
         }
-        const speed = this.queue.length >= 2 ? TUNING.rushSpeed : TUNING.walkSpeed;
-        let budget = speed * dt;
-        while (budget > 0 && m.path.length) {
-          const p = m.path[0];
-          const dx = p.x - m.x;
-          const dy = p.y - m.y;
-          const d = Math.hypot(dx, dy);
-          if (d > 0.01) m.facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up';
-          if (d <= budget) {
-            m.x = p.x;
-            m.y = p.y;
-            m.walkDist += d;
-            budget -= d;
-            m.path.shift();
-          } else {
-            m.x += (dx / d) * budget;
-            m.y += (dy / d) * budget;
-            m.walkDist += budget;
-            budget = 0;
-          }
-        }
+        const target = this.queue.length >= 2 ? TUNING.rushSpeed : TUNING.walkSpeed;
+        // Ease-in di awal, ease-out menjelang tujuan; langkah dibatasi sisa jalur (tidak pernah melompati tujuan).
+        m.speed = nextSpeed({
+          speed: Math.max(m.speed, 0),
+          target,
+          remaining: remainingLength(m, m.path),
+          dt,
+          accel: TUNING.accel,
+          decel: TUNING.decel,
+          minSpeed: TUNING.minSpeed,
+        });
+        const step = advanceAlongPath(m, m.path, m.speed * dt);
+        m.x = step.x;
+        m.y = step.y;
+        m.path = step.path;
+        m.walkDist += step.moved;
+        if (step.facing) m.facing = step.facing;
         if (!m.path.length) {
+          m.speed = 0;
           if (m.job) {
             m.state = 'talking';
             m.facing = 'up';
@@ -390,7 +410,7 @@ export class Office {
       env.t = Math.min(1, env.t + dt / env.dur);
       const k = env.t;
       env.x = env.from.x + (env.to.x - env.from.x) * k;
-      env.y = env.from.y + (env.to.y - env.from.y) * k - Math.sin(Math.PI * k) * env.arc;
+      env.y = env.from.y + (env.to.y - env.from.y) * k - (this.reducedMotion ? 0 : Math.sin(Math.PI * k) * env.arc);
       if (env.t >= 1) arrived.push(env);
     }
     if (arrived.length) {

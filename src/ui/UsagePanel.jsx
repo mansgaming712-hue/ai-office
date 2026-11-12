@@ -3,8 +3,26 @@ import {
   CONFIG_HINT, LEVEL_INFO, UNAVAILABLE_TEXT, USAGE_LABEL, WARNING_TEXT,
   chartBars, formatFull, formatPercent, formatTokens, isLimitWarning,
 } from '../usage.js';
+import { PanelSkeleton } from './Skeleton.jsx';
 
-const wide = () => typeof window !== 'undefined' && window.matchMedia?.('(min-width: 961px)').matches;
+const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+
+/** Blok keterangan yang seragam untuk semua keadaan tanpa angka (memuat, tidak tersedia, limit kosong). */
+function Notice({ kind, title, children }) {
+  return (
+    <div className={`usage-state us-${kind}`}>
+      <span className="usage-state-icon" aria-hidden="true">{kind === 'config' ? '…' : 'i'}</span>
+      <div className="usage-state-text">
+        <p className="usage-state-title">{title}</p>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// Rincian terbuka dari awal hanya bila layar cukup lebar dan tinggi; kalau tidak, ruangnya dipakai kanvas.
+const wide = () =>
+  typeof window !== 'undefined' && Boolean(window.matchMedia?.('(min-width: 961px) and (min-height: 1500px)').matches);
 
 function Tokens({ value, className }) {
   return (
@@ -17,12 +35,12 @@ function Tokens({ value, className }) {
 function WeeklyBar({ weekly }) {
   if (!weekly.configured) {
     return (
-      <p className="usage-config">
-        <span className="usage-k">Mingguan</span>
-        <span>
-          <Tokens value={weekly.used} /> token. {CONFIG_HINT}
-        </span>
-      </p>
+      <Notice kind="config" title="Limit mingguan belum diisi">
+        <p className="usage-state-body">
+          Terpakai minggu ini: <Tokens value={weekly.used} /> token.
+        </p>
+        <p className="usage-state-body usage-state-hint">{CONFIG_HINT}</p>
+      </Notice>
     );
   }
   const info = LEVEL_INFO[weekly.level] ?? LEVEL_INFO.green;
@@ -149,12 +167,17 @@ export default function UsagePanel({ state }) {
         )}
       </div>
 
-      {state?.status === 'loading' && <p className="usage-empty">Memuat data pemakaian…</p>}
+      {state?.status === 'loading' && (
+        <div className="usage-state us-loading" role="status">
+          <PanelSkeleton rows={2} />
+          <p className="usage-state-body">Memuat data pemakaian…</p>
+        </div>
+      )}
       {!ok && state?.status !== 'loading' && (
-        <p className="usage-empty">
-          {UNAVAILABLE_TEXT}
-          {state?.reason && state.reason !== UNAVAILABLE_TEXT && <span className="usage-reason"> ({state.reason})</span>}
-        </p>
+        <Notice kind="unavailable" title={cap(UNAVAILABLE_TEXT)}>
+          {state?.reason && state.reason !== UNAVAILABLE_TEXT && <p className="usage-state-body">{state.reason}</p>}
+          <p className="usage-state-body usage-state-hint">Angka muncul otomatis begitu server membaca log Claude Code.</p>
+        </Notice>
       )}
 
       {ok && (
