@@ -14,15 +14,18 @@
   "author": "mans (https://github.com/mansgaming712-hue)",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=20.12"
   },
   "scripts": {
+    "prebuild": "node scripts/check-toolchain-node.mjs build",
     "build": "vite build",
     "prestart": "npm run build",
     "start": "node server/index.js",
     "serve": "node server/index.js",
+    "pretest": "node scripts/check-toolchain-node.mjs test",
     "test": "vitest run",
     "test:watch": "vitest",
+    "smoke": "node scripts/smoke.mjs",
     "agents:install": "node scripts/install-agents.mjs",
     "agents:validate": "node scripts/validate-agents.mjs",
     "demo:hooks": "node scripts/demo-hooks.mjs",
@@ -31,9 +34,10 @@
     "usage": "node scripts/usage-report.mjs",
     "usage:sample": "node scripts/make-usage-sample.mjs",
     "token": "node scripts/gen-token.mjs",
-    "autostart:install": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/install-autostart.ps1",
-    "autostart:uninstall": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/uninstall-autostart.ps1",
-    "autostart:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/stop-ai-office.ps1"
+    "autostart:install": "node scripts/autostart.mjs install",
+    "autostart:uninstall": "node scripts/autostart.mjs uninstall",
+    "autostart:stop": "node scripts/autostart.mjs stop",
+    "autostart:status": "node scripts/autostart.mjs status"
   },
   "dependencies": {
     "@fontsource/press-start-2p": "^5.3.0",

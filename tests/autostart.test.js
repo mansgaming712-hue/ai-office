@@ -206,22 +206,15 @@ describe('autostart: installer', () => {
 describe('autostart: script npm', () => {
   const scripts = Object.entries(PKG.scripts);
 
-  it('autostart:install/uninstall/stop menunjuk skrip yang benar', () => {
-    expect(PKG.scripts['autostart:install']).toMatch(/-File scripts\/windows\/install-autostart\.ps1$/);
-    expect(PKG.scripts['autostart:uninstall']).toMatch(/-File scripts\/windows\/uninstall-autostart\.ps1$/);
-    expect(PKG.scripts['autostart:stop']).toMatch(/-File scripts\/windows\/stop-ai-office\.ps1$/);
+  it('autostart:install/uninstall/stop/status memanggil dispatcher Node lintas platform', () => {
+    for (const c of ['install', 'uninstall', 'stop', 'status']) {
+      expect(PKG.scripts[`autostart:${c}`]).toBe(`node scripts/autostart.mjs ${c}`);
+    }
   });
 
-  it('-ExecutionPolicy Bypass hanya dipakai dengan -File skrip di scripts/windows/', () => {
-    const bypass = scripts.filter(([, v]) => /ExecutionPolicy/i.test(v));
-    expect(bypass.map(([k]) => k).sort()).toEqual(['autostart:install', 'autostart:stop', 'autostart:uninstall']);
-    for (const [k, v] of bypass) {
-      const m = v.match(/^powershell -NoProfile -ExecutionPolicy Bypass -File scripts\/windows\/([\w-]+\.ps1)$/);
-      expect(m, k).not.toBeNull();
-      expect(FILES, k).toContain(m[1]);
-    }
+  it('tidak ada script npm yang memakai PowerShell langsung (ExecutionPolicy hanya di dispatcher, dites di autostartCrossPlatform.test.js)', () => {
     for (const [k, v] of scripts) {
-      expect(v, k).not.toMatch(/-Command|-EncodedCommand|\s-enc\s/i);
+      expect(v, k).not.toMatch(/powershell|ExecutionPolicy|-Command|-EncodedCommand|\s-enc\s/i);
     }
   });
 });

@@ -13,6 +13,7 @@
 // Semua variabel di atas boleh juga ditulis di file .env di root proyek (lihat .env.example).
 // Mode terbuka (HOST bukan loopback, ALLOWED_HOSTS terisi, atau TRUST_PROXY=1) wajib memakai
 // AI_OFFICE_TOKEN minimal 32 karakter; kalau tidak, server menolak start (exit 1).
+import './requireNode.js'; // paling awal: cek versi Node (minimal 20.12)
 import { loadProjectEnv } from './loadEnv.js';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

@@ -20,6 +20,7 @@
 // Token subagent: message.usage dari baris assistant di agent_transcript_path dijumlahkan (dedup per
 // message.id; maks 8 MB terakhir, dibaca bertahap per 1 MB) dan dikirim sebagai field `tokens`.
 // Field `project`: basename CLAUDE_PROJECT_DIR (bila ada) atau cwd sesi.
+import '../server/requireNodeQuiet.js'; // paling awal: Node terlalu lama = keluar 0 tanpa output
 import { loadProjectEnv } from '../server/loadEnv.js';
 import { closeSync, fstatSync, openSync, readSync } from 'node:fs';
 import { mapHookToEvents, parseStatus } from '../shared/hookMapping.js';

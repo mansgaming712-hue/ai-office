@@ -4,6 +4,7 @@
 //   AI_OFFICE_USER_SETTINGS=<path>  target lain (untuk uji)
 // Hanya entri AI Office (command yang memuat hooks/send-event.mjs proyek ini) yang dihapus; key dan hook
 // lain tetap. Backup dulu, tulis atomik; JSON rusak = tidak menulis apa pun, kode keluar 1.
+import '../server/requireNode.js'; // paling awal: cek versi Node (minimal 20.12)
 import { PROJECT_DIR, SettingsError, backupFile, readSettings, removeAiOfficeHooks, userSettingsPath, writeJsonAtomicSync } from './user-hooks.mjs';
 
 const target = userSettingsPath();
