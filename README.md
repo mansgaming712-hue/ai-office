@@ -1,36 +1,80 @@
 # AI Office
 
-AI Office adalah kantor pixel art untuk tim subagent Claude Code. Sesi Claude Code utama bertindak sebagai
-manajer dan mendelegasikan pekerjaan ke 17 spesialis (Dev, Marketing & Sales, Konten, Riset, dan 3D). Dashboard
-di browser menampilkan delegasi itu secara langsung: manajer berjalan ke meja worker, worker mengetik, lalu
-laporan kembali ke meja manajer sebagai amplop.
+[![CI](https://github.com/mansgaming712-hue/ai-office/actions/workflows/ci.yml/badge.svg)](https://github.com/mansgaming712-hue/ai-office/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Repo ini berisi tiga hal: definisi agen (`agents/`), aturan manajer (`CLAUDE.md`), dan dashboard beserta
-server yang menerima kejadian dari hook Claude Code.
+[Bahasa Indonesia](README.id.md)
 
-## Fitur
+AI Office is a pixel-art office that shows Claude Code subagents at work. The main Claude Code session acts as
+the manager and delegates tasks to 17 specialist agents; the dashboard animates each delegation, from the
+assignment to the report. It is a small local Node server that receives events from Claude Code hooks, plus a
+React dashboard that draws the office in a canvas.
 
-- **Animasi kantor pixel art** di canvas: manajer, meja worker, dan amplop laporan.
-- **Simulasi**: tombol ▶ Simulasi memutar skenario contoh (±60 detik) tanpa Claude Code.
-- **Kotak perintah**: teks biasa dikirim sebagai perintah ke manajer, `@nama-agen` menugaskan agen, atau
-  tempel event JSON.
-- **Hooks Claude Code**: delegasi dari sesi Claude Code sungguhan dikirim otomatis ke dashboard.
-- **Sesi aktif**: daftar proyek yang punya event dalam 10 menit terakhir.
-- **Panel Pemakaian Limit**: estimasi pemakaian token dari log lokal Claude Code. Ini bukan angka resmi.
-- **Mode lokal atau mode token**: lokal hanya bisa diakses dari komputer sendiri, mode token untuk akses
-  jarak jauh di belakang HTTPS (lihat [Deploy ke VPS](#deploy-ke-vps)).
-- **Autostart Windows** (opsional): server menyala otomatis saat login.
-- **Validasi dan test**: `npm run agents:validate` dan `npm test`.
+![Demo of the AI Office dashboard](docs/images/demo.gif)
 
-## Persyaratan
+![Dashboard in dark theme](docs/images/dashboard-dark.png)
 
-- **Node.js ≥ 20** (lihat `engines` di `package.json`). Pemuatan `.env` memakai `process.loadEnvFile`
-  yang tersedia mulai Node 20.12. Di Node yang lebih lama, `.env` dilewati diam-diam.
-- **npm** (ikut terpasang bersama Node.js).
-- **Claude Code** (CLI `claude`) untuk delegasi sungguhan. Mode Simulasi tidak membutuhkannya.
-- Proyek ini dikembangkan di Windows. Skrip autostart hanya untuk Windows. Platform lain belum diuji.
+![Dashboard in light theme](docs/images/dashboard-light.png)
 
-## Cara install
+The screenshots and the demo use simulated data, not real sessions.
+
+## Features
+
+- **Pixel-art office** on a canvas: the manager, worker desks, and report envelopes.
+- **Simulation**: the ▶ Simulasi button plays a sample scenario of about 60 seconds without Claude Code.
+- **Command box**: plain text is sent to the manager, `@agent-name` assigns a specific agent, and you can paste
+  a JSON event.
+- **Claude Code hooks**: delegations from real Claude Code sessions are sent to the dashboard automatically.
+- **Active sessions**: a list of projects that had an event in the last 10 minutes.
+- **Usage Limit panel**: estimated token usage from the local Claude Code logs. These are not official numbers.
+- **Local or token mode**: local mode is reachable only from this computer. Token mode is for remote access
+  behind HTTPS (see [Deploy to a VPS](#deploy-to-a-vps)).
+- **Light and dark theme**: follows the system setting by default and is saved in the browser.
+- **Four agent states**: `idle`, `working`, `done`, and `error`. `error` means the agent reported
+  `STATUS: BUTUH BANTUAN` (Indonesian for "needs help"). Each state has an icon, a label, and a count.
+- **Responsive layout** from phones to large screens. Animations follow `prefers-reduced-motion`.
+- **Autostart** on Windows, macOS, and Linux (optional, no admin rights needed).
+- **Validation and tests**: `npm run agents:validate` and `npm test`.
+
+The UI text, server messages, and agent definitions are written in Indonesian. Translations are welcome.
+
+## Requirements
+
+| Need | Version | Notes |
+| --- | --- | --- |
+| Node.js for the server and hooks | 20.12 or newer | Checked by `server/requireNode.js`. Older versions print a message and exit with code 1. |
+| Node.js for `npm run build` and `npm start` | 20.19 or newer in the 20.x line, or 22.12 or newer | Vite 8 needs this. `npm start` runs the build first. |
+| Node.js for `npm test` | 22.12 or newer | Vitest 5 needs this. |
+| npm | comes with Node.js | |
+| Claude Code (`claude` CLI) | any recent version | Only needed for real delegation. Simulation does not need it. |
+
+**Recommendation:** install Node.js 22.12 or a newer LTS release. That version covers all of the rows above.
+Check your version with `node -v`.
+
+## Install
+
+The commands after the Node.js step are the same in bash, zsh, and PowerShell.
+
+### Windows
+
+1. Install Node.js 22 LTS or newer, either with `winget install OpenJS.NodeJS.LTS` in PowerShell or from
+   https://nodejs.org/. Open a new terminal afterwards.
+2. Install Git if you do not have it: https://git-scm.com/.
+3. Run:
+
+```powershell
+git clone https://github.com/mansgaming712-hue/ai-office.git
+cd ai-office
+npm ci
+npm run agents:install
+npm run hooks:install-user
+```
+
+### macOS
+
+1. Install Node.js 22 LTS or newer, with Homebrew (`brew install node`) or the installer from
+   https://nodejs.org/. Check with `node -v`.
+2. Run:
 
 ```bash
 git clone https://github.com/mansgaming712-hue/ai-office.git
@@ -40,33 +84,110 @@ npm run agents:install
 npm run hooks:install-user
 ```
 
-- `npm run agents:install` menyalin `agents/*.md` ke `~/.claude/agents/`. File yang sudah ada dan berbeda
-  tidak ditimpa. Tambahkan `-- --force` untuk menimpanya.
-- `npm run hooks:install-user` memasang hook ke `~/.claude/settings.json`. Pemasang menggabungkan dengan
-  pengaturan yang ada, membuat backup sebelum menulis, dan aman dijalankan berulang.
-  Pemasang menolak path folder proyek yang memuat `"`, baris baru, `$`, backtick, `%`, atau `!`
-  (lihat `projectProblem` di `scripts/user-hooks.mjs`), karena command hook dijalankan lewat shell.
-- Hook hanya aktif untuk sesi Claude Code yang dimulai **sesudah** pemasangan. Sesi yang sudah berjalan
-  perlu dibuka ulang.
-- Untuk melepas hook: `npm run hooks:uninstall-user`.
+### Linux
 
-## Cara menjalankan
+1. Install Node.js 22 with a version manager such as [nvm](https://github.com/nvm-sh/nvm) or
+   [fnm](https://github.com/Schniz/fnm). Distribution packages are often too old, so check the version with
+   `node -v` before you continue.
+
+```bash
+nvm install 22
+nvm use 22
+```
+
+2. Run:
+
+```bash
+git clone https://github.com/mansgaming712-hue/ai-office.git
+cd ai-office
+npm ci
+npm run agents:install
+npm run hooks:install-user
+```
+
+What the last three commands do:
+
+- `npm run agents:install` copies `agents/*.md` to `~/.claude/agents/` (on Windows, `%USERPROFILE%\.claude\agents\`).
+  A file that already exists and differs is not overwritten. Add `-- --force` to overwrite it.
+- `npm run hooks:install-user` adds the AI Office hooks to `~/.claude/settings.json`. It merges with your
+  existing settings, writes a backup first, and is safe to run again. It refuses a project path that contains
+  `"`, a line break, `$`, a backtick, `%`, or `!`, because hook commands run through a shell. Move the project
+  to another folder in that case.
+- Hooks only apply to Claude Code sessions that start **after** the install. Restart any session that was already
+  running. To remove the hooks, run `npm run hooks:uninstall-user`.
+
+## Run
 
 ```bash
 npm start
 ```
 
-Buka **http://localhost:3000**. `npm start` otomatis membangun UI (`prestart`) lalu menjalankan server.
+PowerShell uses the same command. Open **http://localhost:3000**. `npm start` builds the UI (`prestart`) and then
+starts the server.
 
-- Kalau sudah pernah membangun UI, pakai `npm run serve` (lebih cepat).
-- Port lain: `PORT=3001 npm run serve` (bash) atau `$env:PORT=3001; npm run serve` (PowerShell).
-- **▶ Simulasi** memutar skenario contoh tanpa Claude Code. Tombol **↺ Reset** mengosongkan kantor dan log.
-- **Kotak perintah**: teks biasa = perintah ke manajer; `@dev-qa jalankan test` = manajer menugaskan agen.
-  Klik meja atau nama agen untuk mengisi `@nama`.
-- Untuk delegasi sungguhan: jalankan `claude` di folder proyek ini. Aturan manajer di `CLAUDE.md` berlaku
-  untuk sesi yang dibuka dari folder ini.
+- If the UI is already built, `npm run serve` starts the server without building.
+- Another port: `PORT=3001 npm run serve` (bash, zsh) or `$env:PORT=3001; npm run serve` (PowerShell).
+- **▶ Simulasi** plays the sample scenario without Claude Code. **↺ Reset** clears the office and the log.
+- **Command box**: plain text is a command to the manager. `@dev-qa run the tests` asks the manager to assign
+  that agent. Click a desk or an agent name to fill in `@name`.
+- For real delegation, run `claude` in the project folder. The rules in `CLAUDE.md` apply to sessions started
+  from this folder.
 
-## Konfigurasi
+## Autostart
+
+Autostart starts the AI Office server when you log in. It is optional. The server listens on `127.0.0.1:3000` in
+this setup. Run these commands from the project folder. They work the same in bash, zsh, and PowerShell.
+
+```bash
+npm run autostart:install      # install autostart and start the server
+npm run autostart:status       # show autostart and server state (read only)
+npm run autostart:stop         # stop the server now; autostart stays installed
+npm run autostart:uninstall    # remove autostart and stop the server
+```
+
+To see what the install would write without changing anything:
+
+```bash
+node scripts/autostart.mjs install --dry-run
+```
+
+### Autostart: Windows
+
+- Creates a shortcut named "AI Office" in your user Startup folder. No admin rights needed.
+- A hidden launcher (`scripts/windows/start-ai-office.vbs`) runs a supervisor. The supervisor restarts the server
+  after a crash, waiting 5, 10, 20, 40, and then 60 seconds. After 8 crashes in a row it stops.
+- Server log: `logs/server.log`. When it grows above 5 MB, it moves to `logs/server.log.1`.
+- If the server is already running from `npm start` on port 3000, autostart does not start a second copy.
+
+### Autostart: macOS
+
+- Creates a LaunchAgent at `~/Library/LaunchAgents/com.ai-office.server.plist` and loads it with `launchctl`.
+  No admin rights needed.
+- Server log: `logs/server.log` in the project folder.
+
+### Autostart: Linux
+
+- Creates a systemd user unit at `~/.config/systemd/user/ai-office.service`. It needs `systemctl --user`, so a
+  normal login session is required.
+- The server starts when you log in. To keep it running without a login (for example on a headless machine),
+  run this yourself. The installer does not run it:
+
+```bash
+sudo loginctl enable-linger "$USER"
+```
+
+- Logs: `journalctl --user -u ai-office.service -f`.
+
+### Autostart notes (all platforms)
+
+- The installer records the path of the Node.js executable it runs with. If you switch Node.js versions with
+  nvm, fnm, asdf, or Volta, run `npm run autostart:install` again. The old path may no longer exist. The
+  installer does not warn about this yet.
+- Autostart runs `server/index.js` from the project folder every time you log in, and the user-level hooks run
+  `hooks/send-event.mjs` in every Claude Code session. Keep the project in a folder that only your own account
+  can write to, so nobody else can change the code that runs as you.
+
+## Configuration
 
 ### `.env`
 
@@ -74,183 +195,195 @@ Buka **http://localhost:3000**. `npm start` otomatis membangun UI (`prestart`) l
 cp .env.example .env
 ```
 
-- Semua isi `.env.example` boleh kosong. Tanpa isi, server berjalan di mode lokal (`127.0.0.1:3000`,
-  tanpa login).
-- File `.env` **tidak ikut ke git** (sudah ada di `.gitignore`). Jangan pernah commit `.env`.
-- Variabel yang sudah ada di environment (shell, systemd, atau `env` di `settings.json` Claude Code) **tidak
-  ditimpa** oleh `.env` (lihat `server/loadEnv.js`).
-- `.env` dibaca oleh server dan oleh hook (`hooks/send-event.mjs`) dari folder proyek ini.
-- Daftar lengkap variabel ada di [Variabel lingkungan](#variabel-lingkungan).
+```powershell
+Copy-Item .env.example .env
+```
 
-### `limit-config.json` (opsional)
+- Every value in `.env.example` may be left empty. Without values, the server runs in local mode
+  (`127.0.0.1:3000`, no login).
+- The `.env` file is ignored by git. Never commit it.
+- Variables that already exist in the environment (shell, systemd, or the `env` section of Claude Code's
+  `settings.json`) are **not** overwritten by `.env` (see `server/loadEnv.js`).
+- The server and the hook (`hooks/send-event.mjs`) both read `.env` from the project folder.
+- Loading `.env` uses `process.loadEnvFile`, which exists from Node 20.12. On older Node versions, `.env` is
+  silently skipped.
+- The full list of variables is in [Environment variables](#environment-variables).
+
+### `limit-config.json` (optional)
 
 ```bash
 cp limit-config.example.json limit-config.json
 ```
 
-Isi `weeklyTokenLimit` dengan perkiraan batas token per minggu. Bar batas di panel hanya muncul bila angkanya
-lebih dari 0. File ini ada di `.gitignore`. Penjelasan setiap kunci ada di
-[Konfigurasi limit](#konfigurasi-limit).
+```powershell
+Copy-Item limit-config.example.json limit-config.json
+```
 
-## Agen
+Set `weeklyTokenLimit` to your estimated weekly token limit. The limit bar in the panel only appears when the
+value is greater than 0. The file is ignored by git. Each key is explained in [Limit configuration](#limit-configuration).
 
-17 spesialis ada di `agents/` (sumber) dan dipasang ke `~/.claude/agents/` lewat `npm run agents:install`.
+## Agents
 
-| Divisi | Agen |
+17 specialists are defined in `agents/` (the source). `npm run agents:install` copies them to `~/.claude/agents/`.
+
+| Division | Agents |
 | --- | --- |
 | Dev | dev-frontend, dev-backend, dev-qa, dev-security, dev-ui-critic, dev-devops, dev-docs |
 | Marketing & Sales | sales-copywriter, sales-research, sales-pricing |
-| Konten | content-script, content-animator |
-| Riset | research-analyst |
-| Divisi 3D | 3d-modeler, 3d-materials, 3d-animator, 3d-render |
+| Content | content-script, content-animator |
+| Research | research-analyst |
+| 3D | 3d-modeler, 3d-materials, 3d-animator, 3d-render |
 
-Model per agen ditulis di frontmatter `model:`: `haiku` untuk dev-docs, research-analyst, dan 3d-render;
-`sonnet` untuk sisanya. Hanya `haiku` dan `sonnet` yang diizinkan. Validasi di `scripts/agent-files.mjs`
-menolak model lain (mis. `opus`).
+Each agent sets its model in the `model:` field of its frontmatter. Only `haiku` and `sonnet` are allowed.
+`haiku` is used by dev-docs, research-analyst, and 3d-render, and `sonnet` by the rest. The validation in
+`scripts/agent-files.mjs` rejects any other value, such as `opus`.
 
-Aturan manajer ada di `CLAUDE.md`.
+The manager rules are in `CLAUDE.md`.
 
 ```bash
-npm run agents:validate        # cek frontmatter, nama unik, model, aturan spesialis, salinan terpasang
-npm run agents:install         # pasang/perbarui ke ~/.claude/agents (tidak menimpa file berbeda)
-npm run agents:install -- --force
+npm run agents:validate                # check frontmatter, unique names, models, specialist rules, installed copies
+npm run agents:install                 # install or update in ~/.claude/agents (does not overwrite changed files)
+npm run agents:install -- --force      # overwrite changed files too
 ```
 
-Setelah menarik perubahan yang menambah agen, jalankan `npm run agents:install`. Sebelum itu,
-`npm run agents:validate` melaporkan agen yang belum terpasang.
+After you pull changes that add an agent, run `npm run agents:install`. Until then, `npm run agents:validate`
+reports the agent as not installed.
 
-## Format event
+## Event format
 
-Semua kejadian (simulasi, kotak perintah, hooks) memakai satu format:
+All events (simulation, command box, and hooks) use one format:
 
 ```json
-{ "type": "assign", "from": "manager", "to": "dev-frontend", "message": "Bangun navbar", "time": "2026-11-08T02:30:00.000Z" }
+{ "type": "assign", "from": "manager", "to": "dev-frontend", "message": "Build the navbar", "time": "2026-11-08T02:30:00.000Z" }
 ```
 
 - `type`: `assign` | `working` | `done` | `blocked` | `report`
-- Kunci bahasa Indonesia juga diterima: `tipe`, `dari`, `ke`, `pesan`, `waktu`.
-- `time` boleh dikosongkan (diisi server). Nama khusus: `manager`, `ceo`.
-- `project` (opsional): nama folder sesi Claude Code, maks 64 karakter. Diisi oleh hook.
-- `tokens` (opsional): `{ input, output, cacheRead, cacheCreation }`, hanya dari SubagentStop. Dipakai untuk
-  statistik pemakaian per agen.
+- The Indonesian keys `tipe`, `dari`, `ke`, `pesan`, and `waktu` are also accepted.
+- `time` may be omitted; the server fills it in. Special names: `manager` and `ceo`.
+- `project` (optional): the name of the Claude Code session folder, up to 64 characters. Set by the hook.
+- `tokens` (optional): `{ input, output, cacheRead, cacheCreation }`, only sent with `SubagentStop`. Used for
+  per-agent usage statistics.
 
-Kirim event manual:
+To send an event by hand:
 
 ```bash
-curl -X POST http://localhost:3000/api/events -H "Content-Type: application/json" -d "{\"type\":\"done\",\"from\":\"dev-qa\",\"to\":\"manager\",\"message\":\"9 test lulus\"}"
+curl -X POST http://localhost:3000/api/events \
+  -H "Content-Type: application/json" \
+  -d '{"type":"done","from":"dev-qa","to":"manager","message":"9 tests passed"}'
 ```
 
-Dalam mode token, tambahkan header `-H "Authorization: Bearer $AI_OFFICE_TOKEN"` (lihat
-[Autentikasi dan mode server](#autentikasi-dan-mode-server)).
+```powershell
+Invoke-RestMethod -Method Post -Uri http://localhost:3000/api/events -ContentType 'application/json' `
+  -Body '{"type":"done","from":"dev-qa","to":"manager","message":"9 tests passed"}'
+```
 
-| Endpoint | Fungsi | Mode token |
+In token mode, add the header `Authorization: Bearer <your-token>`. In bash: `-H "Authorization: Bearer $AI_OFFICE_TOKEN"`.
+In PowerShell: `-Headers @{ Authorization = "Bearer $env:AI_OFFICE_TOKEN" }`. See
+[Authentication and server modes](#authentication-and-server-modes).
+
+| Endpoint | Purpose | Token mode |
 | --- | --- | --- |
-| `POST /api/events` | satu event atau array (maks 50), wajib `Content-Type: application/json` | wajib Bearer atau cookie sesi, tanpa itu `401` |
-| `GET /api/events` | 300 event terakhir | wajib Bearer atau cookie sesi, tanpa itu `401` |
-| `GET /api/usage` | `{ok, usage}`: statistik pemakaian token (estimasi lokal) | wajib Bearer atau cookie sesi, tanpa itu `401` |
-| `GET /api/health` | status server | terbuka, hanya menjawab `{ok:true}` (tanpa jumlah klien/event) |
-| `GET /api/session` | `{ok, authRequired, authenticated}` | terbuka |
-| `POST /api/login` | body `{"token":"..."}` (JSON) → cookie sesi `aio_session`; salah `401`, terlalu sering `429` | terbuka (mode lokal selalu `{ok:true}`) |
-| `POST /api/logout` | hapus cookie sesi di browser itu, wajib `Content-Type: application/json` (body boleh `{}`) | terbuka |
-| `WS /ws` | `{kind:"hello", events}`, `{kind:"usage", usage}`, lalu `{kind:"event", event}` dan `{kind:"usage", usage}` saat berubah | wajib Bearer atau cookie sesi, tanpa itu `401`; koneksi ditutup (kode `4401`) saat sesi kedaluwarsa |
+| `POST /api/events` | one event or an array of up to 50. Requires `Content-Type: application/json` | Bearer header or session cookie required, otherwise `401` |
+| `GET /api/events` | the last 300 events | Bearer header or session cookie required, otherwise `401` |
+| `GET /api/usage` | `{ok, usage}`: token usage statistics (local estimate) | Bearer header or session cookie required, otherwise `401` |
+| `GET /api/health` | server status. Returns only `{ok:true}`, without client or event counts | open |
+| `GET /api/session` | `{ok, authRequired, authenticated}` | open |
+| `POST /api/login` | body `{"token":"..."}` (JSON). Sets the `aio_session` cookie. Wrong token: `401`. Too many tries: `429` | open (local mode always returns `{ok:true}`) |
+| `POST /api/logout` | clears the session cookie in this browser. Requires `Content-Type: application/json` (body may be `{}`) | open |
+| `WS /ws` | sends `{kind:"hello", events}`, then `{kind:"usage", usage}`, then `{kind:"event", event}` and `{kind:"usage", usage}` when things change | Bearer header or session cookie required, otherwise `401`. Closed with code `4401` when the session expires |
 
-## Hooks Claude Code
+## Claude Code hooks
 
-Hook Claude Code dipasang di **level user** (`~/.claude/settings.json`), sehingga berlaku untuk sesi dari
-folder mana pun. `.claude/settings.json` proyek berisi `{}` dan tidak memasang hook apa pun.
-
-### Pasang dan lepas
+The hooks are installed at **user level** (`~/.claude/settings.json`), so they apply to sessions from any folder.
+The project file `.claude/settings.json` contains `{}` and installs no hooks.
 
 ```bash
-npm run hooks:install-user     # pasang hook AI Office ke ~/.claude/settings.json
-npm run hooks:uninstall-user   # lepas hook AI Office dari ~/.claude/settings.json
+npm run hooks:install-user     # install the AI Office hooks into ~/.claude/settings.json
+npm run hooks:uninstall-user   # remove the AI Office hooks from ~/.claude/settings.json
 ```
 
-Pemasang (`scripts/install-user-hooks.mjs`, logika bersama di `scripts/user-hooks.mjs`):
+The installer (`scripts/install-user-hooks.mjs`, shared logic in `scripts/user-hooks.mjs`):
 
-- **Merge, tidak menimpa.** Key dan hook lain di settings dibiarkan. Dijalankan berkali-kali tidak
-  menambah entri ganda (idempoten).
-- **Backup.** Sebelum menulis, file lama disalin ke `~/.claude/settings.json.bak-YYYYMMDD-HHMMSS`
-  (kalau nama itu sudah ada, ditambah `-1`, `-2`, dst.). Kalau `settings.json` belum ada, tidak ada backup.
-- **Tulis atomik** (file sementara lalu rename). JSON settings yang rusak: tidak ada yang ditulis,
-  kode keluar `1`.
-- **Path proyek dicek.** Pemasang menolak folder proyek yang path-nya memuat `"`, baris baru, `$`,
-  backtick, `%`, atau `!` (karakter yang bisa diekspansi shell). Pindahkan proyek ke folder lain bila
-  ditolak. Pastikan folder proyek hanya bisa ditulis akunmu sendiri, karena hook ini berjalan di setiap
-  sesi Claude Code. Perintah `hooks:uninstall-user` tidak punya pengecekan ini.
-- **Path absolut.** Command hook memakai path absolut `hooks/send-event.mjs` dari folder tempat
-  pemasang dijalankan. Entri dikenali dari path itu. Kalau folder proyek dipindah, pasang ulang dari
-  lokasi baru. Entri dari lokasi lama tidak dikenali oleh pemasang di lokasi baru: lepas dulu
-  dengan `npm run hooks:uninstall-user` dari folder lama, atau hapus entri `send-event.mjs` lama
-  dari `settings.json` secara manual (setelah backup).
-- **Berlaku untuk sesi baru.** Hook hanya aktif untuk sesi Claude Code yang dimulai sesudah
-  pemasangan. Sesi yang sudah berjalan perlu dibuka ulang.
-- Untuk uji tanpa menyentuh settings asli, arahkan ke file lain lewat `AI_OFFICE_USER_SETTINGS`
-  (lihat [Variabel lingkungan](#variabel-lingkungan)).
+- **Merges, does not overwrite.** Other keys and hooks in the settings file are kept. Running it several times does
+  not add duplicate entries (it is idempotent).
+- **Backs up.** Before writing, the old file is copied to `~/.claude/settings.json.bak-YYYYMMDD-HHMMSS` (with
+  `-1`, `-2`, and so on added if that name exists). If `settings.json` does not exist yet, no backup is made.
+- **Writes atomically** (temporary file, then rename). If the existing JSON is broken, nothing is written and the
+  exit code is `1`.
+- **Checks the project path.** See the list under [Install](#install).
+- **Uses absolute paths.** The hook command points to the absolute path of `hooks/send-event.mjs` in the folder
+  where the installer ran. If you move the project, run the installer again from the new location. Entries from the
+  old location are not recognized from the new one. Run `npm run hooks:uninstall-user` from the old folder first, or
+  remove the old `send-event.mjs` entry from `settings.json` by hand (after making a backup).
+- **Applies to new sessions.** Sessions that were already running need to be restarted.
+- To test without touching your real settings, point `AI_OFFICE_USER_SETTINGS` at another file (see
+  [Environment variables](#environment-variables)).
 
-Hook yang dipasang (event dan matcher sama dengan `desiredHooks` di `scripts/user-hooks.mjs`):
+Hooks that are installed (events and matchers match `desiredHooks` in `scripts/user-hooks.mjs`):
 
-| Hook | Event AI Office |
+| Hook | AI Office event |
 | --- | --- |
-| `PreToolUse` tool `Agent`/`Task` | `assign` manager → subagent (pesan = description) |
-| `SubagentStart` | `working` subagent |
-| `PreToolUse` tool lain (async) | `working` dari subagent (atau manajer), mis. `Edit · App.jsx` |
-| `SubagentStop` | `done` / `blocked` dari baris `STATUS:` laporan |
-| `PostToolUse` tool `Agent`/`Task` | `report` / `blocked` dengan ringkasan laporan |
+| `PreToolUse` with tool `Agent` or `Task` | `assign` from manager to subagent (message = the task description) |
+| `SubagentStart` | `working` for the subagent |
+| `PreToolUse` with any other tool (async) | `working` from the subagent (or manager), for example `Edit · App.jsx` |
+| `SubagentStop` | `done` or `blocked`, read from the `STATUS:` line of the report |
+| `PostToolUse` with tool `Agent` or `Task` | `report` or `blocked`, with a summary of the report |
 
-Perilaku saat berjalan:
+Behaviour at runtime:
 
-- Claude Code menunggu hook paling lama **3 detik** (timeout yang ditulis pemasang).
-- Hook mengirim event ke server dengan batas **800 ms** (`AI_OFFICE_TIMEOUT_MS`, default di
-  `hooks/send-event.mjs`). Event tidak dikirim ulang.
-- Kalau server mati, hook diam-diam keluar dengan kode 0 dan tanpa output, jadi Claude Code tidak
-  terganggu. Event yang gagal terkirim tidak tercatat di mana pun, kecuali dengan `AI_OFFICE_DEBUG=1`.
-- Setiap event membawa `project`: nama folder sesi (basename `CLAUDE_PROJECT_DIR`, atau cwd bila
-  variabel itu kosong). Halaman animasi menampilkan daftar **Sesi aktif**, yaitu sesi dengan event
-  dalam 10 menit terakhir.
-- Event SubagentStop juga membawa `tokens` dari transkrip subagent untuk statistik per agen.
-- Pola rahasia umum (token, API key, password) disembunyikan sebelum dikirim.
-- Kalau event identik (type, from, to, message, project) datang lagi dalam 3 detik, server membuangnya
-  supaya animasi tidak dobel.
+- Claude Code waits for a hook for at most **3 seconds** (the timeout written by the installer).
+- The hook sends the event to the server with an **800 ms** limit (`AI_OFFICE_TIMEOUT_MS`, default in
+  `hooks/send-event.mjs`). Events are not retried.
+- If the server is down, the hook exits silently with code 0 and prints nothing, so Claude Code is not affected.
+  A failed event is not recorded anywhere, unless `AI_OFFICE_DEBUG=1` is set.
+- Every event carries `project`: the session folder name (the basename of `CLAUDE_PROJECT_DIR`, or the working
+  directory when that variable is empty). The **Active sessions** list shows sessions with an event in the last
+  10 minutes.
+- `SubagentStop` events also carry `tokens`, read from the subagent transcript, for per-agent statistics.
+- Common secret patterns (tokens, API keys, passwords) are masked before sending.
+- If an identical event (same type, from, to, message, and project) arrives again within 3 seconds, the server
+  drops it so the animation does not show it twice.
 
-Uji tanpa Claude Code (server harus jalan):
+To test without Claude Code (the server must be running):
 
 ```bash
-npm run demo:hooks              # skenario contoh, jeda ±1,8 detik antar langkah
-npm run demo:hooks -- --fast    # tanpa jeda
-npm run demo:hooks -- --asli    # bentuk payload Claude Code terbaru: agen latar belakang dan
-                                # laporan lewat SubagentHandback yang dibaca dari file transkrip
+npm run demo:hooks              # sample scenario with about 1.8 s between steps
+npm run demo:hooks -- --fast    # no delay
+npm run demo:hooks -- --asli    # payload shape of recent Claude Code: background agents, and reports
+                                # read from the transcript file through SubagentHandback
 ```
 
-Tujuan lain: `AI_OFFICE_URL=http://127.0.0.1:3001/api/events`. Debug: `AI_OFFICE_DEBUG=1`. Daftar lengkap
-ada di [Variabel lingkungan](#variabel-lingkungan).
+To send hook events to another server: `AI_OFFICE_URL=http://127.0.0.1:3001/api/events`. Debug output:
+`AI_OFFICE_DEBUG=1`.
 
-Catatan: cara mengisi variabel hook lewat bagian `"env"` di `~/.claude/settings.json` belum diuji di kode
-ini (lihat [Variabel lingkungan](#variabel-lingkungan)).
+Not tested in this code base: whether the `"env"` section of `~/.claude/settings.json` passes variables to user-level
+hooks. Store hook variables in `.env` or in the system environment for now.
 
-## Panel Pemakaian Limit
+## Usage Limit panel
 
-Panel "Pemakaian Limit" di atas kantor menampilkan **estimasi** pemakaian token Claude Code. Angka resmi ada
-di `/usage` di Claude Code. Panel tidak memanggil model atau API apa pun.
+The "Pemakaian Limit" panel above the office shows an **estimate** of Claude Code token usage. Official numbers are
+in `/usage` inside Claude Code. The panel does not call any model or API.
 
-- **Sumber:** log lokal `~/.claude/projects/**/*.jsonl` (termasuk `subagents/`). Token dihitung dari
-  `message.usage`, dedup per `message.id`, dan dikelompokkan per jam lokal. Token per agen berasal
-  dari event SubagentStop (window 7 hari).
-- **Kapan dihitung ulang:** tiap 60 detik, dan sekitar 2 detik setelah event SubagentStop yang
-  membawa `tokens`.
-- **Rumus mingguan:** input + output + cache tulis, ditambah cache baca bila `countCacheRead` true.
-- **Warna bar:** hijau di bawah 60%, kuning 60–85%, merah di atas 85%. Di atas 85%, panel menampilkan
-  peringatan "Limit hampir habis, hemat mode". Bar hanya muncul bila `weeklyTokenLimit` diisi.
-- **Data tidak tersedia:** kalau log tidak bisa dibaca (folder tidak ada, kosong, atau format tidak
-  dikenali), panel menampilkan "data tidak tersedia" beserta alasannya.
-- **Privasi:** hasil dan log hanya berisi angka dan nama agen. Tidak ada path, isi pesan, atau nama sesi.
-- **Cache:** `data/usage-cache.json` dan `data/usage-agents.json`, dibuat otomatis. Folder `data/`
-  ada di `.gitignore`.
+- **Source:** local logs in `~/.claude/projects/**/*.jsonl` (including `subagents/`). Tokens are read from
+  `message.usage`, de-duplicated by `message.id`, and grouped by local hour. Per-agent tokens come from
+  `SubagentStop` events (a 7-day window).
+- **When it is recalculated:** every 60 seconds, and about 2 seconds after a `SubagentStop` event that carries
+  `tokens`.
+- **Weekly formula:** input + output + cache write, plus cache read when `countCacheRead` is `true`.
+- **Bar colours:** green below 60%, yellow from 60% to 85%, red above 85%. Above 85%, the panel shows the warning
+  "Limit hampir habis, hemat mode" (Indonesian for "limit almost used up, save mode"). The bar only appears when
+  `weeklyTokenLimit` is set.
+- **No data:** if the logs cannot be read (folder missing, empty, or in an unknown format), the panel shows
+  "data tidak tersedia" with the reason.
+- **Privacy:** the results and the logs contain only numbers and agent names. No paths, message text, or session
+  names.
+- **Cache:** `data/usage-cache.json` and `data/usage-agents.json` are created automatically. The `data/` folder is
+  ignored by git.
 
-### Konfigurasi limit
+### Limit configuration
 
-Isi `limit-config.json` di root proyek. Contoh referensi ada di `limit-config.example.json`. Angka di bawah
-hanya contoh:
+Put `limit-config.json` in the project root. A reference example is in `limit-config.example.json`. The values
+below are only examples:
 
 ```json
 {
@@ -261,30 +394,30 @@ hanya contoh:
 }
 ```
 
-| Kunci | Isi | Keterangan |
+| Key | Value | Notes |
 | --- | --- | --- |
-| `weeklyTokenLimit` | angka > 0, atau `0` | perkiraan batas token per minggu. `0` = tanpa batas (bar tidak tampil) |
-| `weekResetDay` | `0`–`6` atau `null` | hari reset (0 = Minggu, 1 = Senin, ..., 6 = Sabtu). `null` = window bergulir 7 hari |
-| `weekResetHour` | `0`–`23` | jam reset, waktu lokal komputer. Default `0` |
-| `countCacheRead` | `true` / `false` | `true` = token cache baca ikut dihitung. Default `false` |
+| `weeklyTokenLimit` | a number above 0, or `0` | estimated weekly token limit. `0` means no limit, and the bar is hidden |
+| `weekResetDay` | `0`–`6` or `null` | reset day (0 = Sunday, 1 = Monday, ..., 6 = Saturday). `null` = rolling 7-day window |
+| `weekResetHour` | `0`–`23` | reset hour, local time of the computer. Default `0` |
+| `countCacheRead` | `true` / `false` | `true` = cache-read tokens are counted too. Default `false` |
 
-File dibaca ulang tiap siklus, jadi server tidak perlu di-restart. Lokasi lain bisa diatur dengan
-`AI_OFFICE_LIMIT_CONFIG`. JSON yang rusak dianggap tidak ada.
+The file is read again on every cycle, so the server does not need a restart. Another location can be set with
+`AI_OFFICE_LIMIT_CONFIG`. Broken JSON is treated as if the file does not exist.
 
-### CLI dan data contoh
+### CLI and sample data
 
 ```bash
-npm run usage                 # ringkasan di terminal (estimasi)
-npm run usage -- --json       # keluaran JSON, bentuk sama dengan GET /api/usage → usage
+npm run usage                 # summary in the terminal (estimate)
+npm run usage -- --json       # JSON output, same shape as GET /api/usage → usage
 ```
 
-`npm run usage` tidak butuh server. Kode keluarnya selalu `0`, termasuk saat data tidak tersedia.
+`npm run usage` does not need the server. Its exit code is always `0`, including when no data is available.
 
-Data contoh, tanpa log Claude Code asli:
+Sample data, when there are no real Claude Code logs:
 
 ```bash
-npm run usage:sample                                             # tulis tests/fixtures/usage-sample/
-AI_OFFICE_CLAUDE_DIR=tests/fixtures/usage-sample npm run usage   # bash
+npm run usage:sample                                                # writes tests/fixtures/usage-sample/
+AI_OFFICE_CLAUDE_DIR=tests/fixtures/usage-sample npm run usage      # bash, zsh
 ```
 
 ```powershell
@@ -292,55 +425,36 @@ npm run usage:sample
 $env:AI_OFFICE_CLAUDE_DIR = "tests\fixtures\usage-sample"; npm run usage; Remove-Item Env:AI_OFFICE_CLAUDE_DIR
 ```
 
-`npm run usage:sample` menghapus folder `projects/` di dalam folder tujuan sebelum menulis ulang.
-Jangan arahkan ke folder log Claude Code yang asli.
+`npm run usage:sample` deletes the `projects/` folder inside the target folder before it writes new data. Do not
+point it at a real Claude Code log folder.
 
-`AI_OFFICE_CLAUDE_DIR` menunjuk folder dasar log (default `~/.claude`). Kalau folder itu tidak punya
-subfolder `projects/`, folder itu sendiri yang dipindai.
+`AI_OFFICE_CLAUDE_DIR` is the base folder for the logs (default `~/.claude`). If that folder has no `projects/`
+subfolder, the folder itself is scanned.
 
-## Autostart Windows
+## Authentication and server modes
 
-Autostart membuat server AI Office menyala saat login Windows. Semua perintah dijalankan dari folder proyek.
-Autostart memakai port 3000 dan hanya mendengar di `127.0.0.1`.
+Always on: the `Host` header is checked (protection against DNS rebinding), `Origin` headers from other sites are
+rejected for the API and the WebSocket, request bodies are limited to 64 KB, the page is sent with a strict
+Content Security Policy, and by default the server log records only event metadata (type, sender, recipient,
+and message length). The server has three modes:
 
-```powershell
-npm run autostart:install     # buat shortcut "AI Office" di folder Startup pengguna, lalu nyalakan server
-npm run autostart:stop        # hentikan supervisor dan server AI Office yang dijalankan peluncur
-npm run autostart:uninstall   # hapus shortcut Startup, lalu hentikan server dari peluncur
-```
+1. **Local mode** (default). Without a token, the server listens only on `127.0.0.1` and can be opened only from
+   this computer. There is no login.
+2. **Token mode**. Active when `AI_OFFICE_TOKEN` or `AI_OFFICE_TOKEN_FILE` is set.
+   - The browser shows a token screen. After a correct token, the server sets the `aio_session` cookie (HttpOnly,
+     SameSite=Strict, and `Secure` when served over HTTPS), valid for 7 days. The **Keluar** button (Indonesian for
+     "Log out") only clears the cookie in that browser. Changing the token ends all sessions.
+   - Hooks and curl send the header `Authorization: Bearer <token>`.
+   - Ten failed logins from one IP address block that IP for 15 minutes (`429`).
+   - The token is never written to logs, responses, or URLs.
+3. **Open mode**. Happens when `HOST` is not a loopback address, when `AI_OFFICE_ALLOWED_HOSTS` is set, or when
+   `AI_OFFICE_TRUST_PROXY=1`. A token of at least 32 characters is required. Without it, the server refuses to
+   start (exit code 1). `AI_OFFICE_TRUST_PROXY=1` is also allowed only with a loopback `HOST` (Nginx on the same
+   machine). For internet access, follow [Deploy to a VPS](#deploy-to-a-vps) (Nginx and HTTPS).
 
-- Tidak butuh hak admin. Perintah install aman dijalankan berulang.
-- Peluncur (`scripts/windows/start-ai-office.vbs`) menjalankan supervisor tanpa jendela. Supervisor menyalakan
-  ulang server bila crash, dengan jeda 5, 10, 20, 40, lalu 60 detik. Setelah 8 crash beruntun, supervisor
-  berhenti.
-- Log server ada di `logs/server.log` (dibuat otomatis, tidak di-commit). Saat lebih dari 5 MB, log dipindah
-  ke `logs/server.log.1`.
-- Kalau server sudah berjalan dari `npm start` di port 3000, autostart tidak menjalankan instance kedua.
+Create a strong token (32 random bytes, 43 characters) and run token mode on your own computer.
 
-## Autentikasi dan mode server
-
-Perlindungan yang selalu aktif: header `Host` diperiksa (melindungi dari DNS rebinding), `Origin`
-situs lain ditolak untuk API dan WebSocket, body dibatasi 64 KB, halaman dikirim dengan CSP ketat,
-dan log server default hanya mencatat metadata event (tipe, pengirim, penerima, panjang pesan).
-Server punya tiga mode:
-
-1. **Mode lokal** (default). Tanpa token, server hanya mendengar di `127.0.0.1` dan hanya bisa
-   dibuka dari komputer ini. Tidak ada login.
-2. **Mode token**. Aktif bila `AI_OFFICE_TOKEN` atau `AI_OFFICE_TOKEN_FILE` terisi.
-   - Browser menampilkan layar token. Setelah token benar, server memasang cookie `aio_session`
-     (HttpOnly, SameSite=Strict, `Secure` bila lewat HTTPS) yang berlaku 7 hari. Tombol **Keluar**
-     hanya menghapus cookie di browser itu; mengganti token membatalkan semua sesi.
-   - Hooks dan curl mengirim header `Authorization: Bearer <token>`.
-   - Login gagal 10 kali dari satu IP diblokir 15 menit (`429`).
-   - Token tidak pernah ditulis ke log, respons, atau URL.
-3. **Mode terbuka**. Terjadi bila `HOST` bukan loopback, `AI_OFFICE_ALLOWED_HOSTS` terisi, atau
-   `AI_OFFICE_TRUST_PROXY=1`. Wajib token minimal 32 karakter; tanpa itu server menolak start
-   (exit 1). `AI_OFFICE_TRUST_PROXY=1` juga hanya boleh dengan `HOST` loopback (Nginx di mesin
-   yang sama). Untuk internet, pakai panduan [Deploy ke VPS](#deploy-ke-vps) (Nginx + HTTPS).
-
-Buat token kuat (32 byte acak, 43 karakter) dan jalankan mode token di komputer sendiri.
-
-Bash (Linux, macOS, Git Bash):
+Bash, zsh (Linux, macOS, Git Bash):
 
 ```bash
 mkdir -p ~/.ai-office
@@ -348,7 +462,7 @@ mkdir -p ~/.ai-office
 AI_OFFICE_TOKEN_FILE="~/.ai-office/token" npm run serve
 ```
 
-PowerShell (belum diuji):
+PowerShell (not tested yet):
 
 ```powershell
 New-Item -ItemType Directory -Force -Path "$HOME\.ai-office" | Out-Null
@@ -357,106 +471,136 @@ $env:AI_OFFICE_TOKEN_FILE = "$HOME\.ai-office\token"
 npm run serve
 ```
 
-`-s` wajib supaya npm tidak menambah baris judul ke file. File token harus berisi satu baris,
-maksimal 4 KB, UTF-8 (dengan atau tanpa BOM) atau UTF-16 dengan BOM (hasil `>` di PowerShell 5.1).
-Simpan token di luar folder proyek dan jangan commit.
+The `-s` flag is required so npm does not add a title line to the file. The token file must contain one line, at
+most 4 KB, in UTF-8 (with or without BOM) or in UTF-16 with BOM (what `>` produces in Windows PowerShell 5.1).
+Keep the token file outside the project folder and never commit it.
 
-## Variabel lingkungan
+## Environment variables
 
 Server (`server/index.js`):
 
-| Variabel | Default | Fungsi |
+| Variable | Default | Purpose |
 | --- | --- | --- |
-| `HOST` | `127.0.0.1` | alamat dengar. Selain loopback (`127.0.0.1`, `localhost`, `::1`) = mode terbuka |
-| `PORT` | `3000` | port HTTP |
-| `AI_OFFICE_TOKEN` | kosong | rahasia bersama; mengaktifkan mode token. Diutamakan bila terisi |
-| `AI_OFFICE_TOKEN_FILE` | kosong | path file berisi token (`~` = folder home), dibaca bila `AI_OFFICE_TOKEN` kosong. File bermasalah = peringatan, server berjalan seperti tanpa token |
-| `AI_OFFICE_ALLOWED_HOSTS` | kosong | hostname dipisah koma yang boleh muncul di header `Host`/`Origin`. Terisi = mode terbuka |
-| `AI_OFFICE_TRUST_PROXY` | kosong | hanya aktif bila `1`: pakai `X-Real-IP` dan `X-Forwarded-Proto` dari Nginx. Wajib `HOST` loopback; = mode terbuka |
-| `AI_OFFICE_DEV_ORIGINS` | kosong | Origin dev server dipisah koma (mis. `http://localhost:5173`) yang diizinkan di mode lokal. Dipakai saat mengembangkan UI dengan `npx vite` |
-| `AI_OFFICE_LOG_MESSAGES` | kosong | hanya aktif bila `1`: isi pesan event ikut ditulis ke log (untuk debugging sementara) |
-| `AI_OFFICE_CLAUDE_DIR` | `~/.claude` | folder dasar log Claude Code untuk [Panel Pemakaian Limit](#panel-pemakaian-limit) |
-| `AI_OFFICE_LIMIT_CONFIG` | `limit-config.json` di root proyek | path file konfigurasi limit |
+| `HOST` | `127.0.0.1` | listen address. Anything other than a loopback address (`127.0.0.1`, `localhost`, `::1`) = open mode |
+| `PORT` | `3000` | HTTP port |
+| `AI_OFFICE_TOKEN` | empty | shared secret. Enables token mode. Used first when set |
+| `AI_OFFICE_TOKEN_FILE` | empty | path to a file with the token (`~` = home folder). Read when `AI_OFFICE_TOKEN` is empty. A bad file gives a warning, and the server runs as if there were no token |
+| `AI_OFFICE_ALLOWED_HOSTS` | empty | comma-separated host names allowed in the `Host` and `Origin` headers. Setting it = open mode |
+| `AI_OFFICE_TRUST_PROXY` | empty | only active when `1`: use `X-Real-IP` and `X-Forwarded-Proto` from Nginx. Requires a loopback `HOST`. Counts as open mode |
+| `AI_OFFICE_DEV_ORIGINS` | empty | comma-separated dev server origins (for example `http://localhost:5173`) allowed in local mode. Used when developing the UI with `npx vite` |
+| `AI_OFFICE_LOG_MESSAGES` | empty | only active when `1`: event message text is also written to the log (for temporary debugging) |
+| `AI_OFFICE_CLAUDE_DIR` | `~/.claude` | base folder of the Claude Code logs for the [Usage Limit panel](#usage-limit-panel) |
+| `AI_OFFICE_LIMIT_CONFIG` | `limit-config.json` in the project root | path to the limit configuration file |
 
 Hook (`hooks/send-event.mjs`):
 
-| Variabel | Default | Fungsi |
+| Variable | Default | Purpose |
 | --- | --- | --- |
-| `AI_OFFICE_URL` | `http://127.0.0.1:3000/api/events` | tujuan event. `http://` hanya ke loopback; host lain wajib `https://`, kalau tidak event apa pun tidak dikirim |
-| `AI_OFFICE_TOKEN` | kosong | dikirim sebagai `Authorization: Bearer` |
-| `AI_OFFICE_TOKEN_FILE` | kosong | path file token, dibaca bila `AI_OFFICE_TOKEN` kosong. Dianjurkan: nilai di `"env"` diwariskan ke semua subprocess Claude Code, file tidak |
-| `AI_OFFICE_TIMEOUT_MS` | `800` | batas waktu request (maks 60000) |
-| `AI_OFFICE_DEBUG` | kosong | `1` = tampilkan error di stderr (token tidak pernah dicetak) |
+| `AI_OFFICE_URL` | `http://127.0.0.1:3000/api/events` | where events are sent. `http://` is allowed only for loopback. Other hosts must use `https://`, otherwise no events are sent |
+| `AI_OFFICE_TOKEN` | empty | sent as `Authorization: Bearer` |
+| `AI_OFFICE_TOKEN_FILE` | empty | path to the token file, read when `AI_OFFICE_TOKEN` is empty. Recommended: values in the `"env"` section are passed to every Claude Code subprocess, a file is not |
+| `AI_OFFICE_TIMEOUT_MS` | `800` | request timeout (maximum 60000) |
+| `AI_OFFICE_DEBUG` | empty | `1` = show errors on stderr. The token is never printed |
 
-Cara mengisi variabel hook: karena hook dipasang di level user, nilainya bisa ditaruh di bagian `"env"`
-`~/.claude/settings.json` (berlaku untuk semua sesi), di environment sistem, atau di `.env` proyek.
-Catatan: perilaku `"env"` untuk hook level user belum diuji di kode ini.
+Hook installer (`scripts/user-hooks.mjs`):
 
-Pemasang hook (`scripts/user-hooks.mjs`):
-
-| Variabel | Default | Fungsi |
+| Variable | Default | Purpose |
 | --- | --- | --- |
-| `AI_OFFICE_USER_SETTINGS` | `~/.claude/settings.json` | file settings yang dipasang/dilepas. Untuk uji saja: arahkan ke file lain, jangan ke settings asli |
+| `AI_OFFICE_USER_SETTINGS` | `~/.claude/settings.json` | settings file to install into or remove from. For testing only: point it at another file, not your real settings |
 
-Semua variabel di atas boleh juga ditulis di `.env` (lihat [Konfigurasi](#konfigurasi)).
+All of the variables above can also be written in `.env` (see [Configuration](#configuration)).
 
-## Deploy ke VPS
+## Deploy to a VPS
 
-Panduan lengkap ada di [`docs/DEPLOY.md`](docs/DEPLOY.md): biaya, setup sekali dengan
-`deploy/setup-vps.sh` (Nginx + HTTPS Let's Encrypt, firewall, systemd), mengarahkan hooks ke VPS,
-update, rollback, dan rotasi token. Baca dulu biaya dan langkahnya sebelum menyewa VPS, membeli domain,
-atau menjalankan skrip di server.
+The full guide is in [`docs/DEPLOY.md`](docs/DEPLOY.md) (Indonesian only; an English translation is open as a good
+first issue). It covers costs, one-time setup with `deploy/setup-vps.sh` (Nginx, HTTPS with Let's Encrypt, firewall,
+systemd), pointing the hooks at the VPS, updates, rollback, and token rotation. Read the costs and steps before you
+rent a server, buy a domain, or run scripts on a server.
 
-## Test
+## Tests
 
 ```bash
 npm test
 ```
 
-Mencakup format event, pemetaan hooks, server HTTP + WebSocket, skrip hook (proses sungguhan),
-engine animasi + skenario simulasi, validasi file agen (termasuk model yang diizinkan), konfigurasi
-hooks, pemasang hook level user, autentikasi token (login, cookie sesi, Bearer, sumber token dari
-file), statistik pemakaian (`usage`, `/api/usage`, dan panel), regresi keamanan, skrip autostart, dan
-pemeriksaan statis kit deploy (`deploy/` dan `docs/DEPLOY.md`). Cek sintaks skrip deploy (`bash -n`)
-dilewati bila `bash` tidak ada di PATH.
+The tests cover the event format, the hook mapping, the HTTP server and WebSocket, the hook scripts (real processes),
+the animation engine and the simulation scenario, validation of agent files (including the allowed models), the
+hook configuration, the user-level hook installer, token authentication (login, session cookie, Bearer header,
+token from a file), usage statistics (`usage`, `/api/usage`, and the panel), security regressions, the autostart
+script, and a static check of the deploy kit (`deploy/` and `docs/DEPLOY.md`). The shell syntax check of the deploy
+scripts (`bash -n`) is skipped when `bash` is not in `PATH`.
 
-## Struktur proyek
+Other checks:
 
-```
-agents/                    17 file subagent (sumber), termasuk divisi 3D (3d-*.md)
-CLAUDE.md                  aturan manajer
-.env.example               contoh konfigurasi (salin ke .env)
-limit-config.example.json  contoh batas mingguan (salin ke limit-config.json)
-data/                      cache statistik pemakaian (dibuat otomatis, di-gitignore)
-logs/                      log server dari autostart Windows (dibuat otomatis, di-gitignore)
-dist/                      hasil build UI (npm run build)
-shared/                    format event, roster, pemetaan hooks, tokenUsage (dipakai server, hook, UI)
-server/                    server HTTP + WebSocket, autentikasi token, sumber token, loadEnv.js, usage.js
-hooks/                     skrip hook Claude Code (send-event.mjs, transcript-tokens.mjs)
-src/                       UI React + canvas
-src/office/                engine animasi, denah, pathfinding, renderer canvas
-src/sim/                   skenario Simulasi
-src/ui/                    komponen React (layar token, panel Pemakaian Limit)
-src/usage.js               validasi dan format data pemakaian untuk UI
-src/sessions.js            nama proyek dan daftar Sesi aktif
-scripts/                   install/validasi agen, pemasang dan pelepas hook level user, laporan pemakaian,
-                           demo hooks, pembuat token
-scripts/windows/           autostart Windows (peluncur, supervisor, pasang, cabut, stop)
-deploy/                    kit VPS: setup-vps.sh, update.sh, rotate-token.sh, lib.sh, systemd, Nginx, contoh env
-docs/DEPLOY.md             panduan deploy ke VPS
-tests/                     vitest
+```bash
+npm run build                  # build the UI into dist/
+npm run smoke                  # start the server on a free port and check GET /api/health
+npm run agents:validate        # check the agent files
 ```
 
-## Keamanan
+CI (`.github/workflows/ci.yml`) runs the build and tests on Ubuntu, Windows, and macOS with Node 22.12 and the
+current LTS. It also runs the production install, the smoke test, and an autostart dry run on Node 20.12.
 
-- **Jangan commit `.env`**, `limit-config.json`, file token, atau isi folder `data/` dan `logs/`. Simpan
-  token di luar folder proyek (mis. `~/.ai-office/token`).
-- **Laporkan celah keamanan secara privat.** Pakai *Report a vulnerability* di
-  [tab Security](https://github.com/mansgaming712-hue/ai-office/security) repo ini (Security Advisory).
-  Jangan buka issue publik untuk celah keamanan.
+## Project structure
 
-Detail mode server dan autentikasi ada di [Autentikasi dan mode server](#autentikasi-dan-mode-server).
+```
+agents/                    17 subagent definitions (source), including the 3D division (3d-*.md)
+CLAUDE.md                  manager rules
+.env.example               configuration example (copy to .env)
+limit-config.example.json  weekly limit example (copy to limit-config.json)
+.github/                   CI workflow, issue templates, and pull request template
+data/                      usage statistics cache (created automatically, git-ignored)
+logs/                      server log from autostart (created automatically, git-ignored)
+dist/                      UI build output (npm run build)
+shared/                    event format, roster, hook mapping, token usage (used by server, hooks, and UI)
+server/                    HTTP and WebSocket server, token authentication, token sources, loadEnv.js, usage.js
+hooks/                     Claude Code hook scripts (send-event.mjs, transcript-tokens.mjs)
+src/                       React and canvas UI
+src/office/                animation engine, layout, pathfinding, canvas renderer
+src/sim/                   simulation scenario
+src/ui/                    React components (token screen, Usage Limit panel)
+src/usage.js               validation and formatting of usage data for the UI
+src/sessions.js            project names and the active sessions list
+scripts/                   agent install and validation, user-level hook installer and remover, usage report,
+                           hook demo, token generator, autostart
+scripts/windows/           Windows autostart (launcher, supervisor, install, uninstall, stop)
+deploy/                    VPS kit: setup-vps.sh, update.sh, rotate-token.sh, lib.sh, systemd, Nginx, env example
+docs/                      DEPLOY.md (Indonesian) and images for this README
+tests/                     Vitest
+```
 
-## Lisensi
+## Troubleshooting
 
-Proyek ini dirilis di bawah lisensi MIT. Lihat [LICENSE](LICENSE).
+- **Node.js is too old.** The server prints a message and exits with code 1. Check `node -v` and install a version
+  from [Requirements](#requirements). If you use autostart, run `npm run autostart:install` again after the change.
+- **`npm run build` or `npm test` fails.** Check the Node.js version against the table in [Requirements](#requirements).
+- **Port 3000 is already in use.** Start on another port, for example `PORT=3001 npm run serve`. Then point the
+  hooks to it with `AI_OFFICE_URL=http://127.0.0.1:3001/api/events`.
+- **Hooks do not show delegations in a session that was already open.** Hooks apply only to sessions started after
+  `npm run hooks:install-user`. Restart Claude Code.
+- **Events do not arrive.** Run the hook with `AI_OFFICE_DEBUG=1` to see errors on stderr, and check that the server
+  is running (`http://127.0.0.1:3000/api/health` should return `{"ok":true}`).
+- **Autostart does not work.** Run `npm run autostart:status`. On Linux, check that `systemctl --user` works in your
+  session (`journalctl --user -u ai-office.service -e` shows the last log lines). On Windows and macOS, the server
+  log is `logs/server.log` in the project folder.
+- **The installer refuses the project path.** The path contains a character that the shell could expand (see
+  [Claude Code hooks](#claude-code-hooks)). Move the project to a folder with a simpler path.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, workflow, test rules, and how to add an agent. Please follow the
+[Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Security
+
+- **Never commit `.env`**, `limit-config.json`, token files, or the contents of `data/` and `logs/`. Keep the token
+  outside the project folder (for example `~/.ai-office/token`).
+- **Report vulnerabilities privately.** Use *Report a vulnerability* on the
+  [Security tab](https://github.com/mansgaming712-hue/ai-office/security) of this repository (a GitHub Security
+  Advisory). Do not open a public issue for a security problem. See [SECURITY.md](SECURITY.md).
+
+More detail on server modes and authentication is in [Authentication and server modes](#authentication-and-server-modes).
+
+## License
+
+AI Office is released under the MIT License. See [LICENSE](LICENSE).
