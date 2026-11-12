@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react';
 import { prepareToken } from '../auth.js';
+import ThemeToggle from './ThemeToggle.jsx';
+import { useTheme } from './useTheme.js';
 
 /**
  * Layar login token. `onLogin(token)` → Promise<{ ok } | { ok: false, error }>.
@@ -7,6 +9,7 @@ import { prepareToken } from '../auth.js';
  * ikut ke URL walau form sampai ter-submit secara native.
  */
 export default function LoginScreen({ notice, onLogin }) {
+  const { theme, toggle } = useTheme();
   const [token, setToken] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(notice ?? null);
@@ -72,6 +75,9 @@ export default function LoginScreen({ notice, onLogin }) {
         <button type="submit" className="btn btn-primary auth-submit" disabled={busy}>
           {busy ? 'Memeriksa…' : 'Masuk'}
         </button>
+        <div className="auth-theme">
+          <ThemeToggle theme={theme} onToggle={toggle} />
+        </div>
       </form>
     </main>
   );

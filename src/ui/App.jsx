@@ -1,22 +1,23 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { DIVISIONS, OTHER_DIVISION } from '../../shared/roster.js';
+import { STATUS_INFO, STATUS_LABEL, UI_STATUSES, countStatuses, summaryText, uiStatusOf } from '../agentStatus.js';
 import { parseCommand } from '../command.js';
-import { Office, STATUS_LABEL } from '../office/engine.js';
-import { STATUS_COLOR } from '../office/render.js';
+import { Office } from '../office/engine.js';
 import { connect, getUsage, postEvents } from '../net.js';
 import { ACTIVE_WINDOW_MS, activeSessions, ago, dropSimSessions, projectOf, trackSession } from '../sessions.js';
 import { playScenario } from '../sim/scenario.js';
 import { POLL_MS, displayUsage, isLimitWarning, parseUsageResponse, usageState, validateUsage } from '../usage.js';
+import { CONN_LABEL, initialLink, linkReducer, stageState } from '../viewState.js';
 import OfficeCanvas from './OfficeCanvas.jsx';
+import { PanelSkeleton } from './Skeleton.jsx';
+import { ConnectionBanner, EmptyCard, LoadingNotice } from './StageNotices.jsx';
+import StatusIcon from './StatusIcon.jsx';
+import ThemeToggle from './ThemeToggle.jsx';
 import UsagePanel from './UsagePanel.jsx';
+import { useReducedMotion, useTheme } from './useTheme.js';
 
 const LOG_LIMIT = 300;
-const TYPE_LABEL = { assign: 'TUGAS', working: 'KERJA', done: 'SELESAI', blocked: 'MENTOK', report: 'LAPOR' };
-const CONN_LABEL = {
-  connecting: 'Menghubungkan…',
-  online: 'Terhubung ke server',
-  offline: 'Server offline — mode lokal',
-};
+const TYPE_LABEL = { assign: 'TUGAS', working: 'KERJA', done: 'SELESAI', blocked: 'ERROR', report: 'LAPOR' };
 
 const fmtTime = (iso) => {
   const d = new Date(iso);
@@ -25,7 +26,7 @@ const fmtTime = (iso) => {
 
 function statusesOf(office) {
   const out = {};
-  for (const w of office.workers.values()) out[w.name] = { status: w.status, division: w.division.id };
+  for (const w of office.workers.values()) out[w.name] = { status: uiStatusOf(w.status), division: w.division.id };
   return out;
 }
 
@@ -41,7 +42,9 @@ export default function App({ authRequired = false, onRecheckSession, onLogout }
   const office = officeRef.current;
 
   const [log, setLog] = useState([]);
-  const [conn, setConn] = useState('connecting');
+  const [link, dispatchLink] = useReducer(linkReducer, initialLink);
+  const { theme, toggle: toggleTheme } = useTheme();
+  const reducedMotion = useReducedMotion();
   const [simRunning, setSimRunning] = useState(false);
   const [statuses, setStatuses] = useState(() => statusesOf(office));
   const [command, setCommand] = useState('');
@@ -90,9 +93,10 @@ export default function App({ authRequired = false, onRecheckSession, onLogout }
   // Koneksi ke server event (hooks Claude Code)
   useEffect(() => {
     const net = connect({
-      onStatus: setConn,
+      onStatus: (status) => dispatchLink({ type: 'status', status }),
       onEvent: (e) => dispatch(e),
       onHistory: (events) => {
+        dispatchLink({ type: 'hello' });
         const fresh = events.filter((e) => e.id && !seen.current.has(e.id));
         let tracked = false;
         fresh.forEach((e) => {
@@ -237,20 +241,33 @@ export default function App({ authRequired = false, onRecheckSession, onLogout }
   const groups = [...DIVISIONS, OTHER_DIVISION]
     .map((d) => ({ ...d, members: Object.entries(statuses).filter(([, s]) => s.division === d.id) }))
     .filter((g) => g.members.length);
+  const counts = countStatuses(statuses);
+  const view = stageState({ link, hasEvents: log.length > 0, simRunning });
+  const loading = view.stage === 'loading';
 
   return (
     <div className="app">
       <main className="stage">
         <UsagePanel state={shownUsage} />
-        <OfficeCanvas office={office} onSelectWorker={selectWorker} limitWarning={limitWarning} />
+        {view.banner && <ConnectionBanner kind={view.banner} />}
+        <OfficeCanvas
+          office={office}
+          onSelectWorker={selectWorker}
+          limitWarning={limitWarning}
+          theme={theme}
+          reducedMotion={reducedMotion}
+          overlay={loading ? <LoadingNotice /> : null}
+        >
+          {view.stage === 'empty' && <EmptyCard onSimulate={toggleSim} />}
+        </OfficeCanvas>
       </main>
 
       <aside className="panel" aria-label="Panel kendali AI Office">
         <header className="panel-head">
           <h1>AI&nbsp;Office</h1>
-          <span className={`conn conn-${conn}`} role="status">
+          <span className={`conn conn-${view.view}`} role="status">
             <span className="dot" aria-hidden="true" />
-            {CONN_LABEL[conn]}
+            {CONN_LABEL[view.view]}
           </span>
         </header>
 
@@ -261,6 +278,7 @@ export default function App({ authRequired = false, onRecheckSession, onLogout }
           <button type="button" className="btn" onClick={resetAll}>
             ↺ Reset
           </button>
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
           {authRequired && (
             <button type="button" className="btn btn-logout" onClick={logout} disabled={leaving}>
               {leaving ? 'Keluar…' : 'Keluar'}
@@ -285,46 +303,79 @@ export default function App({ authRequired = false, onRecheckSession, onLogout }
           )}
         </section>
 
-        <section className="roster" aria-label="Status agen">
-          {groups.map((g) => (
-            <div key={g.id} className="roster-group">
-              <h2 style={{ color: g.color }}>{g.name}</h2>
-              <ul>
-                {g.members.map(([name, s]) => (
-                  <li key={name}>
-                    <button type="button" className="agent-chip" onClick={() => selectWorker(name)} title={`Tugaskan ${name}`}>
-                      <span className="led" style={{ background: STATUS_COLOR[s.status] }} aria-hidden="true" />
-                      <span className="agent-name">{name}</span>
-                      <span className={`agent-status st-${s.status}`}>{STATUS_LABEL[s.status]}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+        <section className="roster" aria-label="Status agen" aria-busy={loading}>
+          {loading ? (
+            <>
+              <p className="sr-only" role="status">Memuat daftar agen…</p>
+              <PanelSkeleton rows={9} />
+            </>
+          ) : (
+            <>
+              <div className="status-summary">
+                <p className="summary-text" role="status">{summaryText(counts)}</p>
+                <ul className="summary-chips" aria-label="Jumlah agen per status">
+                  {UI_STATUSES.map((st) => (
+                    <li key={st} className={`chip-${st}${counts[st] === 0 ? ' is-zero' : ''}`}>
+                      <StatusIcon status={st} size={14} />
+                      <span className="chip-count">{counts[st]}</span>
+                      <span className="chip-label">{STATUS_LABEL[st]}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              {groups.map((g) => (
+                <div key={g.id} className="roster-group">
+                  <h2>
+                    <span className="div-swatch" style={{ background: g.color }} aria-hidden="true" />
+                    {g.name}
+                  </h2>
+                  <ul>
+                    {g.members.map(([name, s]) => (
+                      <li key={name}>
+                        <button
+                          type="button"
+                          className={`agent-chip ac-${s.status}`}
+                          onClick={() => selectWorker(name)}
+                          title={`Tugaskan ${name}. Status: ${STATUS_INFO[s.status].title}`}
+                        >
+                          <StatusIcon key={s.status} status={s.status} size={14} className="agent-icon" />
+                          <span className="agent-name">{name}</span>
+                          <span className={`agent-status st-${s.status}`}>{STATUS_LABEL[s.status]}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </>
+          )}
         </section>
 
         <section className="log-section" aria-labelledby="log-title">
           <h2 id="log-title">Log kejadian</h2>
-          <ol className="log" role="log" aria-live="polite">
-            {log.length === 0 && <li className="log-empty">Belum ada kejadian. Tekan Simulasi atau jalankan Claude Code.</li>}
-            {log.map((e) => (
-              <li key={e.key} className={`log-item t-${e.type}`}>
-                <time dateTime={e.time}>{fmtTime(e.time)}</time>
-                <span className={`badge b-${e.type}`}>{TYPE_LABEL[e.type]}</span>
-                <span className="route">
-                  {e.from} → {e.to}
-                </span>
-                {e.proj && (
-                  <span className="proj" title={`Proyek sesi: ${e.proj}`}>
-                    {e.proj}
+          {loading ? (
+            <PanelSkeleton rows={4} />
+          ) : (
+            <ol className="log" role="log" aria-live="polite">
+              {log.length === 0 && <li className="log-empty">Belum ada kejadian. Tekan Simulasi atau jalankan Claude Code.</li>}
+              {log.map((e) => (
+                <li key={e.key} className={`log-item t-${e.type}`}>
+                  <time dateTime={e.time}>{fmtTime(e.time)}</time>
+                  <span className={`badge b-${e.type}`}>{TYPE_LABEL[e.type]}</span>
+                  <span className="route">
+                    {e.from} → {e.to}
                   </span>
-                )}
-                {e.source && <span className="src">{e.source}</span>}
-                {e.message && <p className="msg">{e.message}</p>}
-              </li>
-            ))}
-          </ol>
+                  {e.proj && (
+                    <span className="proj" title={`Proyek sesi: ${e.proj}`}>
+                      {e.proj}
+                    </span>
+                  )}
+                  {e.source && <span className="src">{e.source}</span>}
+                  {e.message && <p className="msg">{e.message}</p>}
+                </li>
+              ))}
+            </ol>
+          )}
         </section>
 
         <form className="command" onSubmit={submit}>
