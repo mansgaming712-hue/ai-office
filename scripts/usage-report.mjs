@@ -8,6 +8,7 @@
 // tidak ditulis. Token per agen dibaca dari data/usage-agents.json (diisi server dari event hook).
 // Hanya angka dan nama agen yang dicetak: tidak ada path, isi pesan, atau nama sesi.
 // Kode keluar selalu 0 (juga saat data tidak tersedia), supaya aman dipakai di skrip.
+import '../server/requireNode.js'; // paling awal: cek versi Node (minimal 20.12)
 import { createUsageTracker, usageOptionsFromEnv } from '../server/usage.js';
 
 const asJson = process.argv.includes('--json');

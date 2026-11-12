@@ -1,0 +1,17 @@
+# Akhiran baris dikunci LF di semua OS. Tanpa ini, checkout di Windows (mis. runner CI atau
+# core.autocrlf=true) bisa mengubah file menjadi CRLF dan menggagalkan test yang membandingkan
+# isi/byte (skrip .ps1/.vbs, fixture .jsonl, skrip deploy). Aman untuk PowerShell 5.1 dan wscript.
+# File biner terdeteksi otomatis oleh git (text=auto); daftar biner di bawah hanya untuk berjaga-jaga.
+* text=auto eol=lf
+*.ps1 text eol=lf
+*.vbs text eol=lf
+*.sh text eol=lf
+*.jsonl text eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+# deploy/.gitattributes (aturan lebih dalam: "* text eol=lf") tetap berlaku dan sejalan dengan ini.
