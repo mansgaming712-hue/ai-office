@@ -1,0 +1,33 @@
+name: Feature request
+description: Suggest a change or a new feature
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the situation you are in, not only the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: What should happen? A short example is helpful.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Project rules
+      description: Please confirm that the proposal follows these rules (see CONTRIBUTING.md).
+      options:
+        - label: The proposal does not send data to an AI model or AI API from the dashboard or the hooks.
+          required: true
+        - label: The proposal does not require committing secrets or personal data.
+          required: true

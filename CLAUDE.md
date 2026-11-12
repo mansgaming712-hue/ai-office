@@ -96,7 +96,8 @@ Tanggal: YYYY-MM-DD
 
 ## Visual AI Office
 
-Folder ini juga berisi animasi kantor (http://localhost:3000; menyala otomatis saat login Windows). Hooks
+Folder ini juga berisi animasi kantor (http://localhost:3000; bisa menyala otomatis saat login lewat `npm run autostart:install` di Windows,
+macOS, dan Linux). Hooks
 level user di `~/.claude/settings.json` (pasang dengan `npm run hooks:install-user`) mengirim kejadian
 delegasi (assign, working, done, blocked, report) beserta nama folder sesi ke animasi, dari folder mana pun
 sesi Claude Code dijalankan. Panel "Pemakaian Limit" di meja manajer menampilkan estimasi dari log sesi lokal.

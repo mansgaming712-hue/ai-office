@@ -1,0 +1,71 @@
+name: Bug report
+description: Something does not work the way the README describes
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please do not report security problems here. Use the private
+        Security tab instead.
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node.js version
+      description: Output of `node -v`
+      placeholder: "v22.12.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: run-mode
+    attributes:
+      label: How do you run the server?
+      options:
+        - "npm start or npm run serve (manual)"
+        - "Autostart (npm run autostart:install)"
+        - "Other (describe in the steps)"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps, starting from a fresh clone if possible.
+      placeholder: |
+        1. Run `npm ci`
+        2. Run `npm start`
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: Describe what happened. Add a screenshot if it helps.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Paste the relevant output. Before you paste, remove every token, API key, password, and personal path
+        (for example your user name in a folder path). Do not paste the contents of `.env` or a token file.
+      render: text
