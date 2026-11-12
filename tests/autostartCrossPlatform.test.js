@@ -433,7 +433,7 @@ describe('autostart.mjs: pemeriksaan statis', () => {
   it('package.json: skrip npm autostart dan engines', () => {
     const pkg = JSON.parse(read('package.json'));
     expect(pkg.scripts['autostart:status']).toBe('node scripts/autostart.mjs status');
-    expect(pkg.engines.node).toBe('>=20.12');
+    expect(pkg.engines.node).toBe('>=22.12');
   });
   it('scripts/windows tidak berubah perilaku: shortcut Startup masih menunjuk start-ai-office.vbs', () => {
     expect(read('scripts/windows/ai-office-common.ps1')).toMatch(/AiLauncher\s*=\s*Join-Path \$PSScriptRoot 'start-ai-office\.vbs'/);

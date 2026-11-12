@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import '../server/requireNode.js'; // paling awal: cek versi Node (minimal 20.12)
+import '../server/requireNode.js'; // paling awal: cek versi Node (minimal 22.12)
 // Uji asap runtime: nyalakan server di port bebas (mode lokal, 127.0.0.1), tunggu GET /api/health
 // menjawab {"ok":true}, lalu matikan. Hanya butuh dependensi produksi (npm ci --omit=dev), jadi bisa
-// dijalankan di Node 20.12 yang belum cukup baru untuk vite/vitest. Dipakai oleh CI; tidak menyentuh port 3000.
+// dijalankan tanpa build UI. Tidak menyentuh port 3000.
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';

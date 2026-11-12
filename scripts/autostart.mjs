@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import '../server/requireNode.js'; // paling awal: cek versi Node (minimal 20.12)
+import '../server/requireNode.js'; // paling awal: cek versi Node (minimal 22.12)
 // Autostart AI Office lintas platform, tanpa hak admin/root dan hanya menulis di folder home + proyek.
 //   npm run autostart:install | autostart:uninstall | autostart:stop | autostart:status
 //   node scripts/autostart.mjs <install|uninstall|stop|status> [--dry-run]

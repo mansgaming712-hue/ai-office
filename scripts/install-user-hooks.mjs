@@ -5,7 +5,7 @@
 //   AI_OFFICE_USER_SETTINGS=<path>  target lain (untuk uji; jangan arahkan test ke file asli)
 // Merge (tidak menimpa), idempoten, backup settings.json.bak-YYYYMMDD-HHMMSS sebelum menulis, tulis
 // atomik. JSON rusak = tidak menulis apa pun, keluar dengan kode 1. Lihat scripts/user-hooks.mjs.
-import '../server/requireNode.js'; // paling awal: cek versi Node (minimal 20.12)
+import '../server/requireNode.js'; // paling awal: cek versi Node (minimal 22.12)
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import {

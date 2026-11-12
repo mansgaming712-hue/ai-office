@@ -14,7 +14,7 @@
   "author": "mans (https://github.com/mansgaming712-hue)",
   "type": "module",
   "engines": {
-    "node": ">=20.12"
+    "node": ">=22.12"
   },
   "scripts": {
     "prebuild": "node scripts/check-toolchain-node.mjs build",
