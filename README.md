@@ -508,8 +508,8 @@ All of the variables above can also be written in `.env` (see [Configuration](#c
 
 ## Deploy to a VPS
 
-The full guide is in [`docs/DEPLOY.md`](docs/DEPLOY.md) (Indonesian only; an English translation is open as a good
-first issue). It covers costs, one-time setup with `deploy/setup-vps.sh` (Nginx, HTTPS with Let's Encrypt, firewall,
+The full guide is in [`docs/DEPLOY.md`](docs/DEPLOY.md) (Indonesian), with an English translation in
+[`docs/DEPLOY.en.md`](docs/DEPLOY.en.md). It covers costs, one-time setup with `deploy/setup-vps.sh` (Nginx, HTTPS with Let's Encrypt, firewall,
 systemd), pointing the hooks at the VPS, updates, rollback, and token rotation. Read the costs and steps before you
 rent a server, buy a domain, or run scripts on a server.
 
@@ -561,7 +561,7 @@ scripts/                   agent install and validation, user-level hook install
                            hook demo, token generator, autostart
 scripts/windows/           Windows autostart (launcher, supervisor, install, uninstall, stop)
 deploy/                    VPS kit: setup-vps.sh, update.sh, rotate-token.sh, lib.sh, systemd, Nginx, env example
-docs/                      DEPLOY.md (Indonesian) and images for this README
+docs/                      DEPLOY.md (Indonesian), DEPLOY.en.md (English), and images for this README
 tests/                     Vitest
 ```
 
