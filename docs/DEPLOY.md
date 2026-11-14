@@ -1,3 +1,5 @@
+*English version: [`docs/DEPLOY.en.md`](DEPLOY.en.md).*
+
 # Deploy AI Office ke VPS (Bagian 4)
 
 Panduan ini memindahkan animasi AI Office dari `localhost:3000` ke server sendiri (VPS) dengan
