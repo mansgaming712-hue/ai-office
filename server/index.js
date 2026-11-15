@@ -108,6 +108,10 @@ try {
   throw e;
 }
 
+const LOCAL_MODE_WARNING =
+  'Peringatan: mode lokal tanpa token bisa diakses semua akun dan proses di komputer ini. ' +
+  'Di komputer multi-user (atau bersama), set AI_OFFICE_TOKEN_FILE untuk mode token.';
+
 const shown = host === '127.0.0.1' || host === '::1' ? 'localhost' : host;
 console.log(`AI Office jalan di http://${shown}:${port}`);
 if (mode.tokenMode) {
@@ -130,6 +134,7 @@ if (mode.tokenMode) {
 } else {
   console.log('Mode: lokal tanpa token (hanya bisa diakses dari komputer ini).');
   console.log(`Hooks mengirim event ke http://127.0.0.1:${port}/api/events`);
+  console.warn(LOCAL_MODE_WARNING);
 }
 if (logMessages) console.warn('Peringatan: AI_OFFICE_LOG_MESSAGES=1, isi pesan event ikut ditulis ke log server.');
 

@@ -436,6 +436,10 @@ and message length). The server has three modes:
 
 1. **Local mode** (default). Without a token, the server listens only on `127.0.0.1` and can be opened only from
    this computer. There is no login.
+   - Local mode without a token can be reached by every account and every process on this computer, and the hooks
+     send events to whatever process holds port 3000. On a shared or multi-user computer, use token mode
+     (set `AI_OFFICE_TOKEN_FILE`). The server prints a warning at start, and the Windows autostart supervisor
+     refuses to treat a port 3000 listener owned by another account (or with an unreadable owner) as AI Office.
 2. **Token mode**. Active when `AI_OFFICE_TOKEN` or `AI_OFFICE_TOKEN_FILE` is set.
    - The browser shows a token screen. After a correct token, the server sets the `aio_session` cookie (HttpOnly,
      SameSite=Strict, and `Secure` when served over HTTPS), valid for 7 days. The **Keluar** button (Indonesian for
