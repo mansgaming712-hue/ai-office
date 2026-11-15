@@ -49,7 +49,21 @@ $owned = $false
 try { $owned = $mutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $owned = $true }
 if (-not $owned) { exit 0 }   # supervisor lain sudah jalan, diam saja
 
-# 2) Server sudah menjawab di port 3000 (mis. dijalankan manual): jangan jalankan instance kedua.
+function Test-AiPortForeign {
+    # True (dan mencatat peringatan) bila port dipegang proses milik akun lain atau yang pemiliknya tidak
+    # terbaca. Server asing seperti itu bukan AI Office kita dan tidak boleh diam-diam menerima event hook.
+    $o = Get-AiPortOwnerState $script:AiPort
+    if ($o.State -eq 'other' -or $o.State -eq 'unknown') {
+        Write-SupLog "PERINGATAN: port $($script:AiPort) dipakai proses milik akun lain atau pemiliknya tidak terbaca ($($o.Detail)). Supervisor TIDAK menganggapnya AI Office dan tidak menjalankan server. Hook akan mengirim event ke proses itu selama ia memegang port; di komputer bersama pakai mode token (lihat README). Tutup proses itu (atau minta pemiliknya) lalu jalankan start-ai-office.vbs."
+        return $true
+    }
+    return $false
+}
+
+# 2) Port dipegang akun lain / pemilik tidak terbaca: berhenti dengan status gagal (bukan exit sukses).
+if (Test-AiPortForeign) { exit 1 }
+
+# 3) Server sudah menjawab di port 3000 (mis. dijalankan manual): jangan jalankan instance kedua.
 if (Test-AiHealth) {
     Write-SupLog "Server AI Office sudah menjawab di port $($script:AiPort). Tidak menjalankan instance kedua."
     exit 0
@@ -83,6 +97,10 @@ Write-SupLog "Supervisor mulai (PID $PID, node: $node)"
 # --- Loop jalankan + restart ---------------------------------------------------------------------
 $failures = 0
 while ($true) {
+    if (Test-AiPortForeign) {
+        $mutex.ReleaseMutex()
+        exit 1
+    }
     if (Test-AiHealth) {
         Write-SupLog "Server AI Office lain sudah menjawab di port $($script:AiPort). Supervisor berhenti."
         break

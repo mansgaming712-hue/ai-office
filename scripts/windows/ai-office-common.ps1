@@ -12,8 +12,60 @@ $script:AiShortcut   = Join-Path ([Environment]::GetFolderPath('Startup')) 'AI O
 $script:AiLauncher   = Join-Path $PSScriptRoot 'start-ai-office.vbs'
 $script:AiSupervisor = Join-Path $PSScriptRoot 'ai-office-supervisor.ps1'
 
+function Resolve-AiOwnerState([string]$owner, [string]$current) {
+    # Murni (tanpa efek samping): 'same' bila pemilik proses = akun yang sedang berjalan (tanpa peka huruf
+    # besar/kecil), 'unknown' bila pemilik tidak terbaca (proses akun lain biasanya tidak terbaca tanpa admin),
+    # selain itu 'other'.
+    if (-not $owner -or -not $owner.Trim()) { return 'unknown' }
+    if (-not $current) { return 'unknown' }
+    if ($owner.Trim() -ieq $current.Trim()) { return 'same' }
+    return 'other'
+}
+
+function Get-AiProcessOwner([int]$processId) {
+    # "DOMAIN\user" pemilik proses, atau $null bila tidak terbaca.
+    try {
+        $p = Get-CimInstance Win32_Process -Filter "ProcessId=$processId" -ErrorAction Stop
+        if (-not $p) { return $null }
+        $r = Invoke-CimMethod -InputObject $p -MethodName GetOwner -ErrorAction Stop
+        if ($r -and $r.ReturnValue -eq 0 -and $r.User) { return "$($r.Domain)\$($r.User)" }
+        return $null
+    } catch {
+        return $null
+    }
+}
+
+function Get-AiPortOwnerState([int]$port) {
+    # Siapa yang listen di $port? Hasil: objek { State; Detail }.
+    #   none    : tidak ada yang listen
+    #   same    : semua listener milik akun yang sedang berjalan
+    #   other   : ada listener milik akun lain
+    #   unknown : ada listener tapi pemiliknya tidak terbaca (dianggap asing, aman-gagal)
+    $current = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+    $conns = @()
+    try {
+        $conns = @(Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue)
+    } catch {
+        $conns = @()
+    }
+    if ($conns.Count -eq 0) {
+        if (Test-AiPortOpen $port) { return [pscustomobject]@{ State = 'unknown'; Detail = 'ada yang menjawab di port tetapi daftar listener tidak terbaca' } }
+        return [pscustomobject]@{ State = 'none'; Detail = '' }
+    }
+    $worst = 'same'
+    $detail = ''
+    foreach ($pid2 in @($conns | ForEach-Object { $_.OwningProcess } | Sort-Object -Unique)) {
+        $owner = Get-AiProcessOwner $pid2
+        $s = Resolve-AiOwnerState $owner $current
+        if ($s -eq 'other') { $worst = 'other'; $detail = "PID $pid2 milik $owner"; break }
+        if ($s -eq 'unknown') { $worst = 'unknown'; $detail = "pemilik PID $pid2 tidak terbaca" }
+    }
+    return [pscustomobject]@{ State = $worst; Detail = $detail }
+}
+
 function Test-AiHealth {
-    # True bila server AI Office di port 3000 menjawab {"ok":true}.
+    # True bila server AI Office di port 3000 menjawab {"ok":true} DAN listener-nya milik akun yang sedang
+    # berjalan. Jawaban dari proses akun lain (atau yang pemiliknya tidak terbaca) bukan AI Office kita.
     try {
         $req = [System.Net.HttpWebRequest]::Create($script:AiHealthUrl)
         $req.Proxy = $null
@@ -25,17 +77,19 @@ function Test-AiHealth {
             $body = $reader.ReadToEnd()
         } finally { $resp.Close() }
         $json = $body | ConvertFrom-Json
-        return ($json.ok -eq $true)
+        if ($json.ok -ne $true) { return $false }
+        return ((Get-AiPortOwnerState $script:AiPort).State -eq 'same')
     } catch {
         return $false
     }
 }
 
-function Test-AiPortOpen {
-    # True bila ada program apa pun yang mendengar di 127.0.0.1:3000.
+function Test-AiPortOpen([int]$port = 0) {
+    # True bila ada program apa pun yang mendengar di 127.0.0.1:<port> (default: port AI Office).
+    if ($port -le 0) { $port = $script:AiPort }
     $client = New-Object System.Net.Sockets.TcpClient
     try {
-        $ar = $client.BeginConnect('127.0.0.1', $script:AiPort, $null, $null)
+        $ar = $client.BeginConnect('127.0.0.1', $port, $null, $null)
         if (-not $ar.AsyncWaitHandle.WaitOne(1000)) { return $false }
         $client.EndConnect($ar)
         return $true

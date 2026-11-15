@@ -425,6 +425,10 @@ log server secara default hanya mencatat metadata event (tipe, pengirim, penerim
 
 1. **Mode lokal** (default). Tanpa token, server hanya mendengar di `127.0.0.1` dan hanya bisa dibuka dari komputer
    ini. Tidak ada login.
+   - Mode lokal tanpa token bisa diakses semua akun dan proses di komputer ini, dan hook mengirim event ke proses
+     apa pun yang memegang port 3000. Di komputer bersama atau multi-user, pakai mode token (set
+     `AI_OFFICE_TOKEN_FILE`). Server mencetak peringatan saat start, dan supervisor autostart Windows menolak
+     menganggap listener port 3000 milik akun lain (atau yang pemiliknya tidak terbaca) sebagai AI Office.
 2. **Mode token**. Aktif bila `AI_OFFICE_TOKEN` atau `AI_OFFICE_TOKEN_FILE` terisi.
    - Browser menampilkan layar token. Setelah token benar, server memasang cookie `aio_session` (HttpOnly,
      SameSite=Strict, dan `Secure` bila lewat HTTPS) yang berlaku 7 hari. Tombol **Keluar** hanya menghapus cookie

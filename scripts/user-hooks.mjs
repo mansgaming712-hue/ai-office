@@ -7,7 +7,9 @@
 //   - idempoten: entri lama AI Office dibuang dulu lalu dipasang ulang, jadi tidak pernah dobel;
 //   - JSON rusak atau bentuk tak terduga = berhenti tanpa menulis apa pun;
 //   - backup settings.json.bak-YYYYMMDD-HHMMSS sebelum menulis, lalu tulis atomik (tmp lalu rename).
-import { constants, copyFileSync, existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync, constants, copyFileSync, existsSync, lstatSync, readFileSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -177,12 +179,33 @@ export function backupFile(file, now = new Date()) {
   throw new Error('tidak bisa membuat nama file backup');
 }
 
-/** Tulis JSON secara atomik: file sementara di folder yang sama, lalu rename. */
+/**
+ * Tulis JSON secara atomik: file sementara di folder yang sama, lalu rename.
+ *   - Mode file lama dipertahankan (umask tidak boleh memperlebar akses); file baru dibuat 0600.
+ *   - Bila `file` symlink, yang ditulis adalah target aslinya (realpath), dengan file sementara di folder target
+ *     itu: symlink tetap symlink, tidak diganti file biasa.
+ *   - Di Windows mode bit tidak bermakna (chmod hanya mengatur atribut read-only); ACL tidak diubah.
+ */
 export function writeJsonAtomicSync(file, data) {
-  const tmp = join(dirname(file), `.${basename(file)}.tmp-${process.pid}-${Date.now().toString(36)}`);
+  let target = file;
+  let mode = 0o600;
   try {
-    writeFileSync(tmp, `${JSON.stringify(data, null, 2)}\n`, { flag: 'wx' });
-    renameSync(tmp, file);
+    target = realpathSync(file);
+    if (process.platform !== 'win32') mode = statSync(target).mode & 0o777; // Windows: tetap 0600 (bit mode tidak bermakna)
+  } catch (e) {
+    if (e.code !== 'ENOENT') throw e;
+    // target belum ada (atau symlink patah): dibuat baru dengan 0600
+    try {
+      if (lstatSync(file).isSymbolicLink()) throw new SettingsError('settings adalah symlink patah; perbaiki dulu.');
+    } catch (e2) {
+      if (e2 instanceof SettingsError) throw e2;
+    }
+  }
+  const tmp = join(dirname(target), `.${basename(target)}.tmp-${process.pid}-${Date.now().toString(36)}`);
+  try {
+    writeFileSync(tmp, `${JSON.stringify(data, null, 2)}\n`, { flag: 'wx', mode });
+    if (process.platform !== 'win32') chmodSync(tmp, mode); // umask bisa mempersempit mode saat dibuat
+    renameSync(tmp, target);
   } catch (e) {
     try {
       unlinkSync(tmp);

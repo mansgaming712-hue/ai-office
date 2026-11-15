@@ -59,6 +59,7 @@ export function parseHostHeader(value) {
  *   - Tanpa karakter kontrol, spasi, atau DEL (0x00-0x20, 0x7f) di mana pun: parser URL WHATWG diam-diam
  *     membuang tab/CR/LF ("/api/ev<TAB>ents" → /api/events), jadi pemeriksaan di atas bisa dilewati dengan
  *     menyisipkan karakter itu ("/<TAB>/evil", "%<TAB>2f"). Parser HTTP Node sudah menolaknya, ini lapisan kedua.
+ *   - Tanpa segmen berupa nama perangkat DOS Windows (lihat hasDeviceSegment), di semua platform.
  *   - URL yang tidak bisa diurai juga ditolak.
  */
 export function requestPathname(url) {
@@ -67,9 +68,32 @@ export function requestPathname(url) {
   const q = url.search(/[?#]/);
   const path = q < 0 ? url : url.slice(0, q);
   if (path.includes('//') || /%(?:5c|2f)/i.test(path)) return null;
+  let pathname;
   try {
-    return new URL(url, 'http://x').pathname;
+    pathname = new URL(url, 'http://x').pathname;
   } catch {
     return null;
   }
+  return hasDeviceSegment(pathname) ? null : pathname;
+}
+
+// Nama perangkat DOS Windows. Di Windows, "CON", "con.txt", "nul.js", "aux. " dan "com1:x" membuka perangkat,
+// bukan file; membacanya bisa menggantung worker threadpool. Dicocokkan tanpa peka huruf besar/kecil.
+// Cukup mencocokkan awalan nama + pemisah (titik, titik dua, spasi) atau akhir segmen: apa pun sesudah
+// pemisah tidak perlu dicocokkan (".*" tidak cocok dengan \n, \r, U+2028, U+2029 sehingga bisa dilewati).
+const DEVICE_SEGMENT_RE = /^(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³]|conin\$|conout\$)(?:[.: ]|$)/i;
+
+/**
+ * Apakah ada segmen path (setelah didekode persen) yang nama perangkat DOS Windows. Dicek di SEMUA platform,
+ * bukan hanya win32: perilakunya sama di setiap OS (test tidak bergantung platform), dan file statis UI
+ * tidak pernah bernama begitu. Segmen yang tidak bisa didekode dibiarkan (serveStatic menjawab 400).
+ */
+export function hasDeviceSegment(pathname) {
+  let decoded;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return false;
+  }
+  return decoded.split('/').some((seg) => DEVICE_SEGMENT_RE.test(seg));
 }

@@ -378,12 +378,15 @@ export function createAiOfficeServer({
       file = join(file, 'index.html');
       info = await stat(file).catch(() => null);
     }
+    // Selain file biasa (perangkat, FIFO, socket, direktori tanpa index) diperlakukan seperti tidak ada.
+    if (info && !info.isFile()) return send(res, 404, 'Not found');
     if (!info) {
       // Fallback SPA hanya untuk navigasi halaman, bukan aset yang hilang.
       if (extname(pathname)) return send(res, 404, 'Not found');
       file = join(root, 'index.html');
       info = await stat(file).catch(() => null);
       if (!info) return send(res, 503, 'UI belum di-build. Jalankan: npm run build');
+      if (!info.isFile()) return send(res, 404, 'Not found');
     }
     const body = await readFile(file);
     const isAsset = file.includes(`${sep}assets${sep}`);
