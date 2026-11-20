@@ -10,6 +10,31 @@ utama bertindak sebagai manajer dan mendelegasikan tugas ke 17 agen spesialis; d
 delegasi, dari penugasan sampai laporan. Proyek ini berupa server Node lokal kecil yang menerima kejadian dari
 hook Claude Code, ditambah dashboard React yang menggambar kantor di canvas.
 
+## Mulai cepat
+
+**Syarat:** Node.js 22.12+ dan npm. Claude Code opsional (hanya untuk delegasi sungguhan).
+
+```bash
+git clone https://github.com/mansgaming712-hue/ai-office.git
+cd ai-office
+npm ci
+npm start
+```
+
+Buka http://localhost:3000.
+
+**Belum punya Claude Code?** Klik **▶ Simulasi** untuk memutar skenario contoh sekitar 60 detik. Klik **↺ Reset** untuk
+mengosongkan kantor dan log.
+
+**Pakai Claude Code?** Pasang agen dan hooks sekali saja:
+
+```bash
+npm run agents:install
+npm run hooks:install-user
+```
+
+Saat Claude Code berjalan dan hooks terpasang, worker di dashboard ikut bergerak ketika manager mendelegasikan tugas.
+
 ![Demo dashboard AI Office](docs/images/demo.gif)
 
 ![Dashboard tema gelap](docs/images/dashboard-dark.png)
