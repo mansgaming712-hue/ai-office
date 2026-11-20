@@ -10,6 +10,31 @@ the manager and delegates tasks to 17 specialist agents; the dashboard animates 
 assignment to the report. It is a small local Node server that receives events from Claude Code hooks, plus a
 React dashboard that draws the office in a canvas.
 
+## Quick start
+
+**Requirements:** Node.js 22.12+ and npm. Claude Code is optional (only needed for real delegation).
+
+```bash
+git clone https://github.com/mansgaming712-hue/ai-office.git
+cd ai-office
+npm ci
+npm start
+```
+
+Open http://localhost:3000.
+
+**No Claude Code yet?** Click **▶ Simulasi** (the UI is in Indonesian) to play a ~60 second demo scenario. Click
+**↺ Reset** to clear the office and log.
+
+**Using Claude Code?** Install the agents and hooks once:
+
+```bash
+npm run agents:install
+npm run hooks:install-user
+```
+
+When Claude Code runs and the hooks are installed, the workers on the dashboard move as the manager delegates tasks.
+
 ![Demo of the AI Office dashboard](docs/images/demo.gif)
 
 ![Dashboard in dark theme](docs/images/dashboard-dark.png)
