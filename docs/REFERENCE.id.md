@@ -12,6 +12,7 @@ Isi:
 - [Panel Pemakaian Limit](#panel-pemakaian-limit)
 - [Autentikasi, mode server, dan runner key](#autentikasi-mode-server-dan-runner-key)
 - [Autostart](#autostart)
+- [Divisi buatan pengguna](#divisi-buatan-pengguna)
 - [Test dan pemeriksaan](#test-dan-pemeriksaan)
 - [Struktur folder](#struktur-folder)
 
@@ -36,6 +37,7 @@ yang sudah ada), atau di bagian `env` pada pengaturan Claude Code untuk variabel
 | `AI_OFFICE_LOG_MESSAGES` | kosong | Hanya bila `1`: isi pesan event ikut dicatat di log. Default: hanya metadata. |
 | `AI_OFFICE_CLAUDE_DIR` | `~/.claude` | Folder dasar log Claude Code untuk [panel Pemakaian Limit](#panel-pemakaian-limit). Bila tidak ada subfolder `projects/`, folder itu sendiri yang dipindai. |
 | `AI_OFFICE_LIMIT_CONFIG` | `limit-config.json` di root proyek | Path file konfigurasi limit. |
+| `AI_OFFICE_DIVISIONS_DIR` | `divisions/` di root proyek | Folder yang dipindai sekali, saat server mulai, untuk divisi buatan pengguna (`<id>/division.json` dan `<id>/agents/<worker>.md`). Path relatif dihitung dari folder tempat server dijalankan. Juga dipakai `npm run agents:install` dan `npm run agents:validate`. Rincian: [Divisi buatan pengguna](#divisi-buatan-pengguna). |
 | `AI_OFFICE_LANG` | dari `LC_ALL`, `LC_MESSAGES`, `LANG`, lalu sistem | `id` (atau `in`, `ind`) untuk Indonesia; selain itu Inggris. Mengatur bahasa pesan server dan CLI, serta bahasa default tugas runner bila permintaan tidak membawa `lang`. |
 | `AI_OFFICE_RUNNER` | kosong | Isi `1` untuk mengaktifkan runner dan demo di mode terbuka (VPS). Di luar mode terbuka, runner aktif tanpa variabel ini. |
 | `AI_OFFICE_PRINT_KEY` | kosong | Isi `1` untuk mencetak URL dasbor dengan runner key meskipun stdout bukan terminal. Tanpa ini, key hanya dicetak di terminal supaya log layanan tidak memuatnya. |
@@ -269,6 +271,7 @@ Respons tetap `202`, dengan jumlah `duplicates`.
 | `POST /api/events` | Satu event atau array sampai 50. Wajib `Content-Type: application/json`. Mengembalikan `202 { ok, accepted, ids }`. | Header Bearer atau cookie sesi, selain itu `401` |
 | `GET /api/events` | 300 event terakhir. | Header Bearer atau cookie sesi, selain itu `401` |
 | `GET /api/usage` | `{ ok, usage }`: statistik pemakaian token (estimasi lokal). | Header Bearer atau cookie sesi, selain itu `401` |
+| `GET /api/divisions` | `{ ok, divisions, errors }`: divisi plugin yang ditemukan saat server mulai (`id`, `name`, `color`, `desks`, `workers`, `source`). `errors` memuat folder yang dilewati sebagai teks biasa. Tanpa path file atau teks agen. | Header Bearer atau cookie sesi, selain itu `401` |
 | `GET /api/health` | `{ ok: true }`. Di mode lokal juga mengembalikan jumlah `clients` dan `events`. | terbuka |
 | `GET /api/session` | `{ ok, authRequired, authenticated }`. | terbuka |
 | `POST /api/login` | Body `{"token":"..."}`. Mengatur cookie `aio_session`. Token salah: `401`. Terlalu banyak percobaan: `429`. | terbuka (mode lokal selalu `{ ok: true }`) |
@@ -520,6 +523,45 @@ node scripts/autostart.mjs install --dry-run
 - Autostart menjalankan `server/index.js` dari folder proyek setiap kali Anda login, dan hook level user menjalankan
   `hooks/send-event.mjs` di setiap sesi Claude Code. Simpan proyek di folder yang hanya bisa ditulis akun Anda sendiri.
 
+## Divisi buatan pengguna
+
+Divisi berada di folder `divisions/`, atau di folder yang diisi `AI_OFFICE_DIVISIONS_DIR`. Aturan file dan batasnya ada di
+[CONTRIBUTING.md](../CONTRIBUTING.md#adding-a-division) (berbahasa Inggris). Bagian ini mencatat apa yang ditegakkan oleh
+server dan skrip pemasangan.
+
+- **Penemuan.** Server membaca folder itu sekali, saat mulai (`server/divisions.js`). Divisi yang tidak valid dilewati, dan
+  alasannya tercantum di `GET /api/divisions` pada `errors`. Batasnya: 12 divisi plugin, dan 1 sampai 8 worker serta 1
+  sampai 8 meja per divisi.
+- **Frontmatter.** File worker hanya boleh berisi `name`, `description`, `tools`, dan `model`. Kunci lain, misalnya `hooks`,
+  `mcpServers`, atau `permissionMode`, ditolak. Aturan ini juga berlaku untuk agen bawaan, dan `npm run agents:validate`
+  memeriksanya.
+- **Tool aman.** Worker plugin yang hanya memakai `Read`, `Glob`, `Grep`, `Write`, `Edit`, `WebSearch`, dan `TodoWrite`
+  terpasang tanpa flag. Tool lain, misalnya `Bash`, `PowerShell`, `WebFetch`, atau `NotebookEdit`, berisiko.
+- **`npm run agents:install`** memasang worker plugin yang aman. Worker yang tidak lolos validasi dilewati dan keluar dengan
+  kode `3`. Worker berisiko (memakai tool di luar daftar aman) yang baru, atau yang isinya berubah sejak disetujui, dilewati
+  dengan peringatan dan juga keluar dengan kode `3`. File worker itu tetap berada di folder divisinya.
+- **Persetujuan** (`--allow-risky-tools`) terikat ke hash SHA-256 file, bukan ke nama. Perintah mencetak tiap worker berisiko
+  dengan 12 karakter awal hash, lalu mencatat hash lengkapnya di `approvedRisky` pada
+  `~/.claude/agents/.ai-office-installed.json`. Baca lebih dulu baris `tools:` dari paket pihak ketiga.
+- **Memperbarui worker yang sudah disetujui.** File yang berubah dilewati lagi sampai kamu menyetujuinya. Jalankan
+  `--allow-risky-tools --force` setelah membaca file barunya.
+- **`--force`** hanya menimpa file yang tercatat di `~/.claude/agents/.ai-office-installed.json` dan isinya di disk masih
+  cocok dengan hash yang dicatat AI Office. File yang kamu tulis atau ubah tidak pernah ditimpa.
+- **`npm run setup`** menjalankan semua langkah. Bila `agents:install` keluar dengan kode `3`, setup ikut keluar dengan kode
+  `3` dan menyebut worker berisiko yang bisa dikenali di akhir.
+- **Nama tercadang.** Id divisi atau nama worker tidak boleh berupa nama perangkat Windows: `con`, `nul`, `prn`, `aux`,
+  `com0` sampai `com9`, atau `lpt0` sampai `lpt9`.
+- **`npm run division:add --from`** mencetak peringatan bila starter memakai tool berisiko. Starter `dev-team` memakai
+  `Bash`, dan `research-team` memakai `WebFetch`.
+
+```bash
+npm run agents:install                                  # memasang worker aman; melewati worker berisiko yang baru atau berubah (kode keluar 3)
+npm run agents:install -- --allow-risky-tools           # menyetujui dan memasang worker berisiko yang tercantum
+npm run agents:install -- --allow-risky-tools --force   # juga memperbarui worker berisiko yang sudah disetujui dan berubah
+npm run agents:install -- --force                       # hanya menimpa file yang belum diubah dan dipasang AI Office
+npm run agents:validate                                 # memeriksa frontmatter, tool, dan frasa aturan; memberi label worker berisiko
+```
+
 ## Test dan pemeriksaan
 
 ```bash
@@ -544,6 +586,8 @@ Node 22.12 dan LTS terbaru. `agents:validate` tidak dijalankan di CI karena meme
 
 ```text
 agents/                    17 definisi subagen (sumber), termasuk divisi 3D (3d-*.md)
+divisions/                divisi buatanmu, satu folder per divisi (hanya README.md yang dikirim); lihat CONTRIBUTING.md
+division-packs/           starter pack untuk npm run division:add (dev-team, content-team, research-team, example-legal)
 locales/                   terjemahan: en.json dan id.json (namespace cli, ui, office)
 CLAUDE.md                  aturan manajer (dipakai Claude Code saat berjalan di folder ini)
 output/                    hasil tugas dan demo, satu folder per proses (dibuat otomatis, diabaikan git)

@@ -12,6 +12,7 @@ Contents:
 - [Usage Limit panel](#usage-limit-panel)
 - [Authentication, server modes, and the runner key](#authentication-server-modes-and-the-runner-key)
 - [Autostart](#autostart)
+- [User-made divisions](#user-made-divisions)
 - [Tests and checks](#tests-and-checks)
 - [Project structure](#project-structure)
 
@@ -36,6 +37,7 @@ variables that already exist), or in the `env` section of Claude Code's settings
 | `AI_OFFICE_LOG_MESSAGES` | empty | Only when `1`: event message text is also written to the log. Default: metadata only. |
 | `AI_OFFICE_CLAUDE_DIR` | `~/.claude` | Base folder of the Claude Code logs for the [Usage Limit panel](#usage-limit-panel). If it has no `projects/` subfolder, the folder itself is scanned. |
 | `AI_OFFICE_LIMIT_CONFIG` | `limit-config.json` in the project root | Path to the limit configuration file. |
+| `AI_OFFICE_DIVISIONS_DIR` | `divisions/` in the project root | Folder scanned once, at server start, for user-made divisions (`<id>/division.json` and `<id>/agents/<worker>.md`). A relative path is resolved from the folder where the server starts. Also used by `npm run agents:install` and `npm run agents:validate`. Details: [User-made divisions](#user-made-divisions). |
 | `AI_OFFICE_LANG` | from `LC_ALL`, `LC_MESSAGES`, `LANG`, then the system | `id` (or `in`, `ind`) for Indonesian; anything else is English. Sets the language of server and CLI messages, and the default language of runner tasks when the request has no `lang`. |
 | `AI_OFFICE_RUNNER` | empty | Set to `1` to enable the runner and the demo in open mode (VPS). Outside open mode the runner is enabled without this variable. |
 | `AI_OFFICE_PRINT_KEY` | empty | Set to `1` to print the dashboard URL with the runner key even when stdout is not a terminal. Without it the key is printed only in a terminal, so service logs do not contain it. |
@@ -270,6 +272,7 @@ by the server. The response is still `202`, with a `duplicates` count.
 | `POST /api/events` | One event or an array of up to 50. Requires `Content-Type: application/json`. Returns `202 { ok, accepted, ids }`. | Bearer header or session cookie, otherwise `401` |
 | `GET /api/events` | The last 300 events. | Bearer header or session cookie, otherwise `401` |
 | `GET /api/usage` | `{ ok, usage }`: token usage statistics (local estimate). | Bearer header or session cookie, otherwise `401` |
+| `GET /api/divisions` | `{ ok, divisions, errors }`: plugin divisions found at server start (`id`, `name`, `color`, `desks`, `workers`, `source`). `errors` lists skipped folders as plain text. No file paths or agent text. | Bearer header or session cookie, otherwise `401` |
 | `GET /api/health` | `{ ok: true }`. In local mode it also returns `clients` and `events` counts. | open |
 | `GET /api/session` | `{ ok, authRequired, authenticated }`. | open |
 | `POST /api/login` | Body `{"token":"..."}`. Sets the `aio_session` cookie. Wrong token: `401`. Too many tries: `429`. | open (local mode always returns `{ ok: true }`) |
@@ -522,6 +525,45 @@ node scripts/autostart.mjs install --dry-run
   `hooks/send-event.mjs` in every Claude Code session. Keep the project in a folder that only your own account can
   write to.
 
+## User-made divisions
+
+Divisions are folders under `divisions/`, or under the folder set in `AI_OFFICE_DIVISIONS_DIR`. The file rules and limits
+are in [CONTRIBUTING.md](../CONTRIBUTING.md#adding-a-division). This section lists what the server and the install
+scripts enforce.
+
+- **Discovery.** The server reads the folders once, at start (`server/divisions.js`). An invalid division is skipped, and
+  its reason is listed in `GET /api/divisions` under `errors`. Limits: 12 plugin divisions, and 1 to 8 workers and 1 to 8
+  desks per division.
+- **Frontmatter.** A worker file may contain only `name`, `description`, `tools`, and `model`. Other keys, such as `hooks`,
+  `mcpServers`, or `permissionMode`, are rejected. The rule also applies to the built-in agents, and `npm run agents:validate`
+  checks it.
+- **Safe tools.** Plugin workers that use only `Read`, `Glob`, `Grep`, `Write`, `Edit`, `WebSearch`, and `TodoWrite` install
+  without a flag. Any other tool, such as `Bash`, `PowerShell`, `WebFetch`, or `NotebookEdit`, is risky.
+- **`npm run agents:install`** installs safe plugin workers. A worker that fails validation is skipped and exits with code `3`.
+  A risky worker (any tool outside the safe list) that is new, or whose file changed since approval, is skipped with a warning
+  and also exits with code `3`. Its file stays in its division folder.
+- **Approval** (`--allow-risky-tools`) is tied to the SHA-256 hash of the file, not its name. The command prints each risky
+  worker with the first 12 characters of the hash, then records the full hash under `approvedRisky` in
+  `~/.claude/agents/.ai-office-installed.json`. Read the `tools:` line of any third-party pack first.
+- **Updating an approved worker.** A changed file is skipped again until you approve it. Run `--allow-risky-tools --force`
+  after you have read the new file.
+- **`--force`** overwrites a file only when `~/.claude/agents/.ai-office-installed.json` lists it and the file on disk still
+  has the hash that AI Office recorded. Files you wrote or changed are never overwritten.
+- **`npm run setup`** runs every step. When `agents:install` exits with code `3`, setup exits with code `3` too, and names
+  the risky workers it could identify at the end.
+- **Reserved names.** A division id or a worker name cannot be a Windows device name: `con`, `nul`, `prn`, `aux`, `com0` to
+  `com9`, or `lpt0` to `lpt9`.
+- **`npm run division:add --from`** prints a warning when the starter uses a risky tool. The `dev-team` starter uses `Bash`,
+  and `research-team` uses `WebFetch`.
+
+```bash
+npm run agents:install                                  # installs safe workers; skips new or changed risky workers (exit code 3)
+npm run agents:install -- --allow-risky-tools           # approves and installs the risky workers it lists
+npm run agents:install -- --allow-risky-tools --force   # also updates an approved risky worker whose file changed
+npm run agents:install -- --force                       # overwrites only unchanged files that AI Office installed
+npm run agents:validate                                 # checks frontmatter, tools, and rule phrases; labels risky workers
+```
+
 ## Tests and checks
 
 ```bash
@@ -547,6 +589,8 @@ Node 22.12 and the current LTS. `agents:validate` is not run in CI because it ch
 
 ```text
 agents/                    17 subagent definitions (source), including the 3D division (3d-*.md)
+divisions/                your own divisions, one folder each (only README.md ships); see CONTRIBUTING.md
+division-packs/           starter packs for npm run division:add (dev-team, content-team, research-team, example-legal)
 locales/                   translations: en.json and id.json (namespaces cli, ui, office)
 CLAUDE.md                  manager rules (used by Claude Code when it runs in this folder)
 output/                    task and demo results, one folder per run (created automatically, git-ignored)

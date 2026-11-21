@@ -18,6 +18,7 @@ dan versi Inggris ada di [bagian English](README.md#english).
 - **Panel Pemakaian Limit:** estimasi pemakaian token dari log Claude Code lokal. Ini bukan angka resmi.
 - **Mode lokal atau token**, tema terang dan gelap, antarmuka Bahasa Indonesia dan Inggris.
 - **Autostart** di Windows, macOS, dan Linux (opsional).
+- **Divisi buatan pengguna:** tambahkan divisi sebagai data biasa (JSON dan Markdown), dari kerangka kosong atau starter pack. Maksimal 12 divisi. Lihat [Divisi buatan pengguna](#divisi-buatan-pengguna).
 
 ### Mulai cepat
 
@@ -125,6 +126,20 @@ Runner ini tidak punya Bash, PowerShell, maupun alat MCP, dan hanya membaca sert
 | 3D | 3d-modeler, 3d-materials, 3d-animator, 3d-render |
 
 Periksa agen yang terpasang dengan `npm run agents:validate`.
+
+### Divisi buatan pengguna
+
+Tambahkan divisi dari starter pack (`dev-team`, `content-team`, `research-team`, atau `example-legal`) dalam tiga baris:
+
+```bash
+npm run division:add legal -- --from example-legal   # membuat divisions/legal/
+npm run agents:install                                # menyalin file worker ke ~/.claude/agents
+npm start                                             # mulai ulang server (hentikan yang lama dulu)
+```
+
+Tanpa `--from`, perintah membuat kerangka dengan satu worker dan dua meja. Tambahkan `--dry-run` untuk melihat hasilnya tanpa menulis apa pun. Server hanya membaca `divisions/` saat mulai, jadi mulai ulang setelah setiap perubahan. Jalankan `npm run agents:validate` untuk memeriksa hasilnya. Divisi yang tidak valid dilewati, server tetap jalan, dan alasannya tercantum di `GET /api/divisions`.
+
+Divisi hanyalah data, bukan kode, dan AI Office tidak pernah menjalankannya. File worker hanya boleh memakai kunci frontmatter `name`, `description`, `tools`, dan `model`; setelah dipasang, Claude Code memuatnya sebagai subagen. Karena itu `npm run agents:install` melewati worker plugin yang memakai tool di luar daftar aman (`Read`, `Glob`, `Grep`, `Write`, `Edit`, `WebSearch`, `TodoWrite`) dan keluar dengan kode `3`. Periksa baris `tools:` dari paket apa pun yang tidak kamu tulis sebelum memakai `--allow-risky-tools`. `--force` hanya menimpa file yang dipasang AI Office dan belum kamu ubah. Aturan, batas, dan cara mengirim starter pack baru: [CONTRIBUTING.md](CONTRIBUTING.md#adding-a-division) (berbahasa Inggris).
 
 ### Pemecahan masalah
 

@@ -24,6 +24,7 @@ Kantor pixel-art tempat manajer Claude Code dan 17 agen spesialisnya bekerja, te
 - **Usage panel:** an estimate of token usage from your local Claude Code logs. It is not an official number.
 - **Local or token mode**, light and dark theme, English and Bahasa Indonesia interface.
 - **Autostart** on Windows, macOS, and Linux (optional).
+- **Your own divisions:** add a division as plain data (JSON and Markdown), from a skeleton or a starter pack. Up to 12 divisions. See [Custom divisions](#custom-divisions).
 
 ### Quick start
 
@@ -131,6 +132,20 @@ The runner has no Bash, PowerShell, or MCP tools, and it reads and writes only i
 
 Check the installed agents with `npm run agents:validate`.
 
+### Custom divisions
+
+Add a division from a starter pack (`dev-team`, `content-team`, `research-team`, or `example-legal`) in three lines:
+
+```bash
+npm run division:add legal -- --from example-legal   # creates divisions/legal/
+npm run agents:install                                # copies the worker files to ~/.claude/agents
+npm start                                             # restart the server (stop the old one first)
+```
+
+Without `--from`, the command creates a skeleton with one worker and two desks. Add `--dry-run` to preview without writing anything. The server reads `divisions/` only when it starts, so restart it after every change. Run `npm run agents:validate` to check the result. Invalid divisions are skipped, the server still starts, and the reason is listed at `GET /api/divisions`.
+
+Divisions are data, not code, and AI Office never runs them. Worker files may use only the frontmatter keys `name`, `description`, `tools`, and `model`, and once installed Claude Code loads them as subagents. So `npm run agents:install` skips a plugin worker that uses a tool outside the safe list (`Read`, `Glob`, `Grep`, `Write`, `Edit`, `WebSearch`, `TodoWrite`) and exits with code `3`. Read the `tools:` line of any pack you did not write before you add `--allow-risky-tools`. `--force` overwrites only files that AI Office installed and you have not changed. Rules, limits, and how to send a new starter pack: [CONTRIBUTING.md](CONTRIBUTING.md#adding-a-division).
+
 ### Troubleshooting
 
 - **Port 3000 is already in use.** Start on another port. macOS and Linux: `PORT=3001 npm start`. Windows PowerShell:
@@ -169,6 +184,7 @@ AI Office is released under the MIT License. See [LICENSE](LICENSE).
 - **Panel Pemakaian Limit:** estimasi pemakaian token dari log Claude Code lokal. Ini bukan angka resmi.
 - **Mode lokal atau token**, tema terang dan gelap, antarmuka Bahasa Indonesia dan Inggris.
 - **Autostart** di Windows, macOS, dan Linux (opsional).
+- **Divisi buatan pengguna:** tambahkan divisi sebagai data biasa (JSON dan Markdown), dari kerangka kosong atau starter pack. Maksimal 12 divisi. Lihat [Divisi buatan pengguna](#divisi-buatan-pengguna).
 
 ### Mulai cepat
 
@@ -276,6 +292,20 @@ Runner ini tidak punya Bash, PowerShell, maupun alat MCP, dan hanya membaca sert
 | 3D | 3d-modeler, 3d-materials, 3d-animator, 3d-render |
 
 Periksa agen yang terpasang dengan `npm run agents:validate`.
+
+### Divisi buatan pengguna
+
+Tambahkan divisi dari starter pack (`dev-team`, `content-team`, `research-team`, atau `example-legal`) dalam tiga baris:
+
+```bash
+npm run division:add legal -- --from example-legal   # membuat divisions/legal/
+npm run agents:install                                # menyalin file worker ke ~/.claude/agents
+npm start                                             # mulai ulang server (hentikan yang lama dulu)
+```
+
+Tanpa `--from`, perintah membuat kerangka dengan satu worker dan dua meja. Tambahkan `--dry-run` untuk melihat hasilnya tanpa menulis apa pun. Server hanya membaca `divisions/` saat mulai, jadi mulai ulang setelah setiap perubahan. Jalankan `npm run agents:validate` untuk memeriksa hasilnya. Divisi yang tidak valid dilewati, server tetap jalan, dan alasannya tercantum di `GET /api/divisions`.
+
+Divisi hanyalah data, bukan kode, dan AI Office tidak pernah menjalankannya. File worker hanya boleh memakai kunci frontmatter `name`, `description`, `tools`, dan `model`; setelah dipasang, Claude Code memuatnya sebagai subagen. Karena itu `npm run agents:install` melewati worker plugin yang memakai tool di luar daftar aman (`Read`, `Glob`, `Grep`, `Write`, `Edit`, `WebSearch`, `TodoWrite`) dan keluar dengan kode `3`. Periksa baris `tools:` dari paket apa pun yang tidak kamu tulis sebelum memakai `--allow-risky-tools`. `--force` hanya menimpa file yang dipasang AI Office dan belum kamu ubah. Aturan, batas, dan cara mengirim starter pack baru: [CONTRIBUTING.md](CONTRIBUTING.md#adding-a-division) (berbahasa Inggris).
 
 ### Pemecahan masalah
 
