@@ -28,6 +28,36 @@ body:
     validations:
       required: true
   - type: dropdown
+    id: ui-lang
+    attributes:
+      label: UI language
+      description: The language of the dashboard (the EN / ID buttons, or the browser language on first visit).
+      options:
+        - English
+        - Bahasa Indonesia
+        - Mixed or not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: task-kind
+    attributes:
+      label: What did you use when the bug happened?
+      options:
+        - "Demo button (server demo, no Claude Code)"
+        - "Simulation button (local animation, no server task)"
+        - "A real task from the command box (Claude Code runner)"
+        - "Only the Claude Code hooks (no task from the dashboard)"
+    validations:
+      required: true
+  - type: input
+    id: claude-version
+    attributes:
+      label: Claude Code CLI version
+      description: Output of `claude --version`. Only needed if you ran a real task or the hooks. Leave empty for the demo or the simulation.
+      placeholder: "2.x.x"
+    validations:
+      required: false
+  - type: dropdown
     id: run-mode
     attributes:
       label: How do you run the server?
@@ -43,7 +73,7 @@ body:
       label: Steps to reproduce
       description: Numbered steps, starting from a fresh clone if possible.
       placeholder: |
-        1. Run `npm ci`
+        1. Run `npm run setup`
         2. Run `npm start`
         3. ...
     validations:
@@ -67,5 +97,6 @@ body:
       label: Logs
       description: |
         Paste the relevant output. Before you paste, remove every token, API key, password, and personal path
-        (for example your user name in a folder path). Do not paste the contents of `.env` or a token file.
+        (for example your user name in a folder path). Do not paste the contents of `.env`, a token file, or the
+        runner key file (`~/.ai-office/runner-key`).
       render: text
