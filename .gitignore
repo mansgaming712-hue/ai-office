@@ -4,6 +4,9 @@ dist/
 logs/
 data/
 
+# Folder hasil tugas runner dan demo (output/<waktu>-<slug>/): berisi hasil kerja dan log, tidak di-commit.
+output/
+
 # Rahasia dan konfigurasi lokal: jangan pernah di-commit.
 .env
 .env.*

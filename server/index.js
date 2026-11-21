@@ -10,16 +10,24 @@
 //   AI_OFFICE_LOG_MESSAGES=1 ikut mencatat isi pesan event di log (default: hanya metadata)
 //   AI_OFFICE_CLAUDE_DIR     folder dasar log Claude Code untuk statistik pemakaian (default ~/.claude)
 //   AI_OFFICE_LIMIT_CONFIG   path limit-config.json (default: root proyek); lihat server/usage.js
+//   AI_OFFICE_LANG           bahasa pesan: id atau en (default: dari LC_ALL/LANG/sistem)
+//   AI_OFFICE_RUNNER=1       mode terbuka (VPS): aktifkan runner dan demo (default: nonaktif)
+//   AI_OFFICE_CLAUDE_BIN, AI_OFFICE_RUNNER_ALLOWED_TOOLS, AI_OFFICE_RUNNER_EXTRA_ARGS, AI_OFFICE_RUNNER_TIMEOUT_MS
+//                            pengaturan runner (lihat server/runner.js)
+//   AI_OFFICE_PRINT_KEY=1    cetak URL dasbor dengan runner key walau stdout bukan terminal (default: hanya di terminal)
 // Semua variabel di atas boleh juga ditulis di file .env di root proyek (lihat .env.example).
 // Mode terbuka (HOST bukan loopback, ALLOWED_HOSTS terisi, atau TRUST_PROXY=1) wajib memakai
 // AI_OFFICE_TOKEN minimal 32 karakter; kalau tidak, server menolak start (exit 1).
 import './requireNode.js'; // paling awal: cek versi Node (minimal 22.12)
 import { loadProjectEnv } from './loadEnv.js';
 import { existsSync } from 'node:fs';
+import { detectLang, t } from '../shared/i18n.js';
 import { fileURLToPath } from 'node:url';
 import { createAiOfficeServer } from './app.js';
 import { MIN_OPEN_TOKEN_LENGTH, resolveAuthMode } from './auth.js';
 import { hostnameOf } from './net.js';
+import { loadRunnerKey } from './runnerKey.js';
+import { broadFileTools } from './runner.js';
 import { resolveToken, tokenFileLabel } from './tokenSource.js';
 import { createUsageTracker, usageOptionsFromEnv } from './usage.js';
 
@@ -45,24 +53,22 @@ if (tokenInfo.problem) {
   if (tokenInfo.invalid) {
     // Token ada tetapi tidak sah (spasi, non-ASCII, surrogate tunggal, ...): salah konfigurasi, jangan
     // diam-diam berjalan tanpa token.
-    console.error(`Server tidak dijalankan: ${label} ${tokenInfo.problem}.`);
+    console.error(t('start.tokenInvalid', { label, problem: tokenInfo.problem }));
     process.exit(1);
   }
-  console.warn(`Peringatan: ${label} ${tokenInfo.problem}; server berjalan seperti tanpa token.`);
+  console.warn(t('start.tokenIgnored', { label, problem: tokenInfo.problem }));
 }
 if (rawProxy && !trustProxy) {
   // Nilainya tidak dicetak: bisa saja token yang salah tempel ke variabel ini.
-  console.warn('Peringatan: AI_OFFICE_TRUST_PROXY hanya aktif bila bernilai 1 (nilai sekarang bukan 1, tidak ditampilkan), jadi diabaikan.');
+  console.warn(t('start.proxyIgnored'));
 }
 // Nilai variabel di bawah juga tidak dicetak (alasan sama dengan TRUST_PROXY), hanya nama dan alasannya.
 if (rawLogMessages && !logMessages) {
-  console.warn('Peringatan: AI_OFFICE_LOG_MESSAGES hanya aktif bila bernilai 1 (nilai sekarang bukan 1, tidak ditampilkan), jadi diabaikan.');
+  console.warn(t('start.logMessagesIgnored'));
 }
 const badHosts = rawHosts.filter((h) => !hostnameOf(h));
 if (badHosts.length) {
-  console.warn(
-    `Peringatan: nilai AI_OFFICE_ALLOWED_HOSTS tidak valid diabaikan: ${badHosts.length} entri bukan hostname yang sah (nilainya tidak ditampilkan).`,
-  );
+  console.warn(t('start.badHosts', { n: badHosts.length }));
 }
 
 const mode = resolveAuthMode({ host, allowedHosts, trustProxy, token });
@@ -72,12 +78,28 @@ if (mode.error) {
 }
 
 if (!existsSync(staticDir)) {
-  console.warn('Peringatan: folder dist/ belum ada. Jalankan "npm run build" (atau "npm start" yang otomatis build).');
+  console.warn(t('start.noDist'));
 }
 
-const serverLog = (line) => console.log(`${new Date().toLocaleTimeString('id-ID', { hour12: false })} ${line}`);
+const timeLocale = detectLang() === 'id' ? 'id-ID' : 'en-GB';
+const serverLog = (line) => console.log(`${new Date().toLocaleTimeString(timeLocale, { hour12: false })} ${line}`);
 // Statistik pemakaian (estimasi lokal dari log Claude Code; tidak memanggil API apa pun).
 const usage = createUsageTracker({ ...usageOptionsFromEnv(), log: serverLog });
+
+// Runner key (mode lokal tanpa token): header X-AI-Office-Key untuk endpoint runner, demo, dan file tugas.
+let runnerKey = null;
+if (!mode.tokenMode) {
+  try {
+    runnerKey = loadRunnerKey();
+  } catch (e) {
+    console.warn(t('start.runnerKeyFail', { reason: e.code ?? e.message }));
+  }
+}
+const runnerEnabled = (process.env.AI_OFFICE_RUNNER ?? '').trim() === '1';
+if (!mode.open || runnerEnabled) {
+  const broad = broadFileTools(process.env);
+  if (broad.length) console.warn(t('start.broadTools', { tools: broad.join(', ') }));
+}
 
 let app;
 try {
@@ -91,6 +113,8 @@ try {
     logMessages,
     devOrigins,
     usage,
+    runnerKey,
+    runnerEnabled,
     log: serverLog,
   });
 } catch (e) {
@@ -102,41 +126,43 @@ try {
   await app.listen();
 } catch (e) {
   if (e.code === 'EADDRINUSE') {
-    console.error(`Port ${port} sudah dipakai. Tutup aplikasi lain di port itu atau jalankan dengan PORT=3001.`);
+    console.error(t('start.portInUse', { port }));
     process.exit(1);
   }
   throw e;
 }
 
-const LOCAL_MODE_WARNING =
-  'Peringatan: mode lokal tanpa token bisa diakses semua akun dan proses di komputer ini. ' +
-  'Di komputer multi-user (atau bersama), set AI_OFFICE_TOKEN_FILE untuk mode token.';
+const LOCAL_MODE_WARNING = t('start.localWarning');
 
 const shown = host === '127.0.0.1' || host === '::1' ? 'localhost' : host;
-console.log(`AI Office jalan di http://${shown}:${port}`);
+console.log(t('start.listening', { url: `http://${shown}:${port}` }));
 if (mode.tokenMode) {
-  console.log('Mode: token aktif. Browser wajib login; hooks dan curl memakai header Authorization: Bearer.');
+  console.log(t('start.modeToken'));
   if (token.length < MIN_OPEN_TOKEN_LENGTH) {
-    console.warn(`Peringatan: token lebih pendek dari ${MIN_OPEN_TOKEN_LENGTH} karakter. Buat token kuat dengan: npm run -s token`);
+    console.warn(t('start.shortToken', { min: MIN_OPEN_TOKEN_LENGTH }));
   }
-  if (allowedHosts.length) console.log(`Host yang diizinkan: ${allowedHosts.join(', ')}`);
-  console.log(trustProxy ? 'Proxy dipercaya: IP dari X-Real-IP, HTTPS dari X-Forwarded-Proto.' : 'Proxy tidak dipercaya: X-Real-IP dan X-Forwarded-Proto diabaikan.');
+  if (allowedHosts.length) console.log(t('start.allowedHosts', { hosts: allowedHosts.join(', ') }));
+  console.log(t(trustProxy ? 'start.proxyTrusted' : 'start.proxyNotTrusted'));
   if (mode.open && !trustProxy) {
-    console.warn(
-      'Peringatan: server terbuka di jaringan tanpa AI_OFFICE_TRUST_PROXY=1, artinya tanpa HTTPS dari Nginx. ' +
-        'Token dan cookie sesi dikirim tanpa enkripsi dan bisa disadap. Pasang di belakang Nginx + HTTPS lalu set AI_OFFICE_TRUST_PROXY=1.',
-    );
+    console.warn(t('start.openNoProxy'));
   }
-  console.log(
-    `Hooks: isi AI_OFFICE_URL (mis. http://127.0.0.1:${port}/api/events) dan AI_OFFICE_TOKEN_FILE (path file token) ` +
-      'atau AI_OFFICE_TOKEN di .claude/settings.local.json bagian "env".',
-  );
+  console.log(t('start.hooksToken', { port }));
+  if (mode.open && !runnerEnabled) console.log(t('start.runnerOffOpen'));
 } else {
-  console.log('Mode: lokal tanpa token (hanya bisa diakses dari komputer ini).');
-  console.log(`Hooks mengirim event ke http://127.0.0.1:${port}/api/events`);
+  console.log(t('start.modeLocal'));
+  console.log(t('start.hooksLocal', { port }));
   console.warn(LOCAL_MODE_WARNING);
+  if (runnerKey) {
+    // URL dengan key di FRAGMENT (#key=...): fragment tidak dikirim ke server dan tidak masuk log akses.
+    // Key hanya dicetak di terminal (atau bila AI_OFFICE_PRINT_KEY=1): stdout autostart/service masuk file log.
+    if (process.stdout.isTTY || (process.env.AI_OFFICE_PRINT_KEY ?? '').trim() === '1') {
+      console.log(t('start.dashboardUrl', { url: `http://${shown}:${port}/#key=${runnerKey}` }));
+    } else {
+      console.log(t('start.openHint'));
+    }
+  }
 }
-if (logMessages) console.warn('Peringatan: AI_OFFICE_LOG_MESSAGES=1, isi pesan event ikut ditulis ke log server.');
+if (logMessages) console.warn(t('start.logMessagesOn'));
 
 const shutdown = () => app.close().then(() => process.exit(0));
 process.on('SIGINT', shutdown);

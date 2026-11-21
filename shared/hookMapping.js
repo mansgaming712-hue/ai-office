@@ -307,7 +307,7 @@ export function extractText(value, depth = 0) {
 // Penanda STATUS harus berada di awal baris; di depannya hanya boleh spasi, "#", ">", "-", atau "*"
 // (mis. "STATUS: SELESAI", "**STATUS: BUTUH BANTUAN**", "> STATUS: DONE", "## STATUS:** SELESAI").
 // Kutipan di tengah kalimat (mis. 'Laporan "STATUS: BUTUH BANTUAN" tampil ...') bukan penanda.
-const STATUS_LINE = /^[\s#>*-]*STATUS\s*:\s*(?:\*+\s*)?(BUTUH\s+BANTUAN|BLOCKED|MENTOK|SELESAI|DONE)\b/i;
+const STATUS_LINE = /^[\s#>*-]*STATUS\s*:\s*(?:\*+\s*)?(BUTUH\s+BANTUAN|NEEDS?\s+HELP|BLOCKED|MENTOK|SELESAI|DONE)\b/i;
 
 /**
  * "blocked" | "done" | "unknown" dari penanda STATUS PERTAMA yang berada di awal baris.

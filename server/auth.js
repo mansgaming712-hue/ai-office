@@ -11,6 +11,7 @@
 // - Token tidak pernah ditulis ke log, respons, atau URL.
 import { createHash, createHmac, hkdfSync, timingSafeEqual } from 'node:crypto';
 import { isIP } from 'node:net';
+import { t } from '../shared/i18n.js';
 import { isLoopbackHost } from './net.js';
 
 export const SESSION_COOKIE = 'aio_session';
@@ -44,31 +45,22 @@ export function safeEqual(a, b) {
  * Mengembalikan { tokenMode, open, reasons, error } — error berisi pesan bila konfigurasi ditolak.
  */
 export function resolveAuthMode({ host = '127.0.0.1', allowedHosts = [], trustProxy = false, token = '' } = {}) {
-  const t = String(token ?? '').trim();
+  const tok = String(token ?? '').trim();
   const loopback = isLoopbackHost(host);
-  const shownHost = host === '' ? '(kosong = semua antarmuka)' : host;
+  const shownHost = host === '' ? t('auth.hostAll') : host;
   const reasons = [];
-  if (!loopback) reasons.push(`HOST=${shownHost} bukan loopback`);
-  if (allowedHosts.length > 0) reasons.push('AI_OFFICE_ALLOWED_HOSTS terisi');
+  if (!loopback) reasons.push(t('auth.reasonNotLoopback', { host: shownHost }));
+  if (allowedHosts.length > 0) reasons.push(t('auth.reasonAllowedHosts'));
   if (trustProxy) reasons.push('AI_OFFICE_TRUST_PROXY=1');
   const open = reasons.length > 0;
   const errors = [];
-  if (open && t.length < MIN_OPEN_TOKEN_LENGTH) {
-    errors.push(
-      `Server tidak dijalankan: mode terbuka (${reasons.join(', ')}) wajib memakai AI_OFFICE_TOKEN ` +
-        `minimal ${MIN_OPEN_TOKEN_LENGTH} karakter, sedangkan token ${t ? 'terlalu pendek' : 'kosong'}. ` +
-        'Buat token kuat dengan: npm run -s token',
-    );
+  if (open && tok.length < MIN_OPEN_TOKEN_LENGTH) {
+    errors.push(t('auth.openNeedsToken', { reasons: reasons.join(', '), min: MIN_OPEN_TOKEN_LENGTH, state: t(tok ? 'auth.tokenShort' : 'auth.tokenEmpty') }));
   }
   if (trustProxy && !loopback) {
-    errors.push(
-      `Server tidak dijalankan: AI_OFFICE_TRUST_PROXY=1 hanya boleh dipakai dengan HOST loopback ` +
-        `(127.0.0.1, localhost, atau ::1), sedangkan HOST=${shownHost}. Proxy (Nginx) harus berjalan di ` +
-        'mesin yang sama; kalau tidak, klien lain bisa memalsukan X-Real-IP dan X-Forwarded-Proto. ' +
-        'Set HOST=127.0.0.1 atau hapus AI_OFFICE_TRUST_PROXY.',
-    );
+    errors.push(t('auth.proxyNeedsLoopback', { host: shownHost }));
   }
-  return { tokenMode: t.length > 0, open, reasons, error: errors.length ? errors.join('\n') : null, token: t };
+  return { tokenMode: tok.length > 0, open, reasons, error: errors.length ? errors.join('\n') : null, token: tok };
 }
 
 /** Nilai pertama header (sebelum koma pertama), tanpa memecah seluruh header. */

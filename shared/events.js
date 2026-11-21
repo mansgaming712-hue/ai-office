@@ -10,6 +10,7 @@
 //   project  nama folder sesi Claude Code (teks, maks 64 karakter; dibersihkan seperti message)
 //   tokens   { input, output, cacheRead, cacheCreation }: bilangan bulat ≥ 0 (maks 1e12), dari hook
 //            SubagentStop (jumlah message.usage di transkrip subagent)
+//   task     id tugas runner/demo (^[a-z0-9][a-z0-9-]{0,63}$), supaya UI bisa membuat log yang bisa diklik
 // Event lama tanpa project/tokens tetap valid.
 
 export const EVENT_TYPES = ['assign', 'working', 'done', 'blocked', 'report'];
@@ -17,6 +18,7 @@ export const EVENT_SOURCES = ['hook', 'sim', 'ui', 'api'];
 export const LIMITS = { name: 64, message: 500, batch: 50, project: 64 };
 export const TOKEN_KEYS = ['input', 'output', 'cacheRead', 'cacheCreation'];
 export const MAX_TOKEN_COUNT = 1e12;
+export const TASK_ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 // Peta alias: objek tanpa prototype + Object.hasOwn, supaya nama seperti "constructor" atau
 // "toString" tidak mengambil fungsi dari Object.prototype.
@@ -225,6 +227,14 @@ export function normalizeEvent(input, { now = () => new Date() } = {}) {
     project = cleanLine(raw.project, LIMITS.project);
   }
 
+  let task = '';
+  if (raw.task !== undefined && raw.task !== null) {
+    if (typeof raw.task !== 'string' || !TASK_ID_RE.test(raw.task.trim())) {
+      return { ok: false, error: '"task" harus id tugas (huruf kecil, angka, -; maks 64 karakter)' };
+    }
+    task = raw.task.trim();
+  }
+
   let tokens = null;
   if (raw.tokens !== undefined && raw.tokens !== null) {
     const t = normalizeTokens(raw.tokens);
@@ -245,6 +255,7 @@ export function normalizeEvent(input, { now = () => new Date() } = {}) {
   if (typeof raw.source === 'string' && EVENT_SOURCES.includes(raw.source)) event.source = raw.source;
   if (Number.isInteger(raw.id) && raw.id > 0) event.id = raw.id;
   if (project) event.project = project;
+  if (task) event.task = task;
   if (tokens) event.tokens = tokens;
   return { ok: true, event };
 }

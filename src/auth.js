@@ -1,20 +1,30 @@
+import { t } from './i18n.js';
+
 // Logika keputusan autentikasi UI. Fungsi murni: tanpa DOM, tanpa fetch, tanpa React,
 // supaya bisa dites dengan vitest di environment node.
 //
 // Konvensi `status`: angka status HTTP, atau `null` kalau request gagal sebelum ada respons
 // (jaringan putus, timeout). `body`: hasil JSON.parse, atau `undefined` kalau JSON rusak/kosong.
 
-export const MESSAGES = Object.freeze({
-  sessionExpired: 'Sesi berakhir, silakan masuk lagi.',
-  loggedOut: 'Kamu sudah keluar.',
-  tokenEmpty: 'Token akses wajib diisi.',
-  wrongToken: 'Token salah.',
-  tooMany: 'Terlalu banyak percobaan. Coba lagi nanti.',
-  network: 'Tidak bisa menghubungi server. Periksa koneksi lalu coba lagi.',
-  unknownResponse: 'Respons server tidak dikenal. Coba lagi.',
-  cookieBlocked: 'Token diterima, tetapi sesi tidak tersimpan. Pastikan cookie diizinkan dan alamat memakai HTTPS.',
-  logoutNetwork: 'Keluar belum tercatat di server (koneksi gagal). Sesi mungkin masih aktif.',
-});
+const MESSAGE_KEYS = {
+  sessionExpired: 'ui.auth.sessionExpired',
+  loggedOut: 'ui.auth.loggedOut',
+  tokenEmpty: 'ui.auth.tokenEmpty',
+  wrongToken: 'ui.auth.wrongToken',
+  tooMany: 'ui.auth.tooMany',
+  network: 'ui.auth.network',
+  unknownResponse: 'ui.auth.unknownResponse',
+  cookieBlocked: 'ui.auth.cookieBlocked',
+  logoutNetwork: 'ui.auth.logoutNetwork',
+};
+
+// Teks dibaca lewat getter supaya mengikuti bahasa aktif (src/i18n.js, namespace `ui`).
+export const MESSAGES = Object.freeze(
+  Object.defineProperties(
+    {},
+    Object.fromEntries(Object.entries(MESSAGE_KEYS).map(([k, key]) => [k, { enumerable: true, get: () => t(key) }])),
+  ),
+);
 
 const MAX_SERVER_MESSAGE = 200;
 
@@ -67,7 +77,7 @@ export function loginResult(status, body) {
   if (status === 401) return { ok: false, error: fromServer || MESSAGES.wrongToken };
   if (status === 429) return { ok: false, error: fromServer || MESSAGES.tooMany };
   if (status >= 200 && status < 300) return { ok: false, error: MESSAGES.unknownResponse };
-  return { ok: false, error: fromServer || `Gagal masuk (HTTP ${status}). Coba lagi.` };
+  return { ok: false, error: fromServer || t('ui.auth.loginHttp', { status }) };
 }
 
 /**
@@ -90,7 +100,7 @@ export function logoutResult(status, body) {
   if (status == null) return { ok: false, error: MESSAGES.logoutNetwork };
   if ((status === 200 && isObject(body) && body.ok === true) || status === 401) return { ok: true };
   const fromServer = serverMessage(body);
-  return { ok: false, error: `Keluar gagal (${fromServer || `HTTP ${status}`}). Sesi mungkin masih aktif.` };
+  return { ok: false, error: t('ui.auth.logoutFail', { detail: fromServer || `HTTP ${status}` }) };
 }
 
 // ------------------------------------------------------------------ state machine

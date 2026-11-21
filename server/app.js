@@ -7,9 +7,14 @@
 //   GET  /api/health   status server
 //   GET  /api/session  { ok, authRequired, authenticated }
 //   POST /api/login    body { token } → cookie aio_session (mode token)
+//   GET  /api/runner, POST /api/tasks, POST /api/demo, GET /api/tasks[/<id>[/files/<path>]], POST /api/tasks/<id>/cancel
+//                      runner Claude Code dan demo (server/tasks.js). Otorisasi: mode token = auth yang sama dengan
+//                      /api/events; mode lokal = header X-AI-Office-Key (runner key); mode terbuka = nonaktif kecuali
+//                      opsi runnerEnabled (AI_OFFICE_RUNNER=1). GET /api/runner boleh tanpa key (tanpa detail tugas aktif).
 //   POST /api/logout   hapus cookie aio_session
 //   WS   /ws           { kind: "hello", events: [...] }, { kind: "usage", usage } (bila opsi usage),
-//                      lalu { kind: "event", event } dan { kind: "usage", usage } setiap statistik berubah
+//                      lalu { kind: "event", event }, { kind: "usage", usage } setiap statistik berubah, dan
+//                      { kind: "task", task: { id, title, status, kind, summary? } } setiap status tugas berubah
 //
 // Mode token (opsi `token` terisi): /api/events, /api/usage, dan /ws butuh `Authorization: Bearer <token>`
 // atau cookie aio_session sah. Lihat server/auth.js.
@@ -38,9 +43,13 @@
 import { createServer as createHttpServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
-import { normalizeBatch } from '../shared/events.js';
-import { createAuth, createLoginLimiter, resolveAuthMode } from './auth.js';
+import { TASK_ID_RE, normalizeBatch } from '../shared/events.js';
+import { t } from '../shared/i18n.js';
+import { createAuth, createLoginLimiter, resolveAuthMode, safeEqual } from './auth.js';
+import { StoreError } from './outputStore.js';
+import { TaskError, createTaskService } from './tasks.js';
 import { REASONS, unavailableUsage } from './usage.js';
 import { hostnameOf, isLoopbackHost, parseHostHeader, requestPathname } from './net.js';
 
@@ -72,6 +81,9 @@ export function createAiOfficeServer({
   dedupWindowMs = 3000,
   devOrigins: devOriginList = [],
   usage = null,
+  runnerKey = null,
+  runnerEnabled = false,
+  taskOptions = {},
   log = () => {},
 } = {}) {
   // Mode terbuka (bukan loopback / allowedHosts / trustProxy) tanpa token ≥ 32 karakter ditolak,
@@ -360,6 +372,137 @@ export function createAiOfficeServer({
     return send(res, 200, { ok: true }, { 'Set-Cookie': auth.clearCookie(req) });
   }
 
+  // ---------------------------------------------------------------- runner, demo, file tugas
+  const methodNotAllowed = (res, allow) => send(res, 405, { ok: false, error: 'Method tidak diizinkan' }, { Allow: allow });
+
+  /** Bagian otorisasi (tanpa cek runner aktif): { ok: true } atau { ok: false, status, error }. */
+  function runnerAuthorization(req) {
+    if (auth.enabled) return auth.check(req).ok ? { ok: true } : { ok: false, status: 401, error: 'Butuh autentikasi' };
+    const given = req.headers['x-ai-office-key'];
+    if (typeof given !== 'string' || given === '') return { ok: false, status: 401, error: t('runner.err.keyMissing') };
+    if (!runnerKey || given.length > 256 || !safeEqual(given, runnerKey)) {
+      return { ok: false, status: 403, error: t(runnerKey ? 'runner.err.keyBad' : 'runner.err.noKey') };
+    }
+    return { ok: true };
+  }
+
+  /** Otorisasi penuh untuk endpoint runner/demo/file: true bila lolos, selain itu respons sudah dikirim. */
+  function runnerGate(req, res) {
+    const a = runnerAuthorization(req);
+    if (!a.ok) {
+      send(res, a.status, { ok: false, error: a.error }, a.status === 401 && auth.enabled ? { 'WWW-Authenticate': 'Bearer' } : {});
+      return false;
+    }
+    if (!tasks.enabled) {
+      send(res, 403, { ok: false, error: t('runner.err.disabled') });
+      return false;
+    }
+    return true;
+  }
+
+  const sendTaskError = (res, e) => {
+    if (e instanceof TaskError) return send(res, e.status, { ok: false, error: e.message });
+    if (e instanceof StoreError) {
+      const key = { 'bad-path': 'runner.err.badPath', 'too-large': 'runner.err.tooLarge', 'not-text': 'runner.err.notText' }[e.message] ?? 'runner.err.notFound';
+      return send(res, e.status, { ok: false, error: t(key) });
+    }
+    return sendError(res, e);
+  };
+
+  async function handleTasks(req, res, pathname) {
+    if (pathname === '/api/runner') {
+      if (req.method !== 'GET') return methodNotAllowed(res, 'GET');
+      const authorized = runnerAuthorization(req).ok;
+      const st = await tasks.status({ showActive: authorized });
+      // Tanpa auth di mode token/terbuka: jangan bocorkan versi CLI maupun status sibuk. Mode lokal tidak berubah.
+      const hide = !authorized && (auth.enabled || openMode);
+      return send(res, 200, {
+        ok: true,
+        available: st.available,
+        reason: hide && st.reason === 'busy' ? null : st.reason,
+        keyRequired: !auth.enabled,
+        version: hide ? null : st.version,
+        active: st.active,
+      });
+    }
+    if (pathname === '/api/demo') {
+      if (req.method !== 'POST') return methodNotAllowed(res, 'POST');
+      if (!runnerGate(req, res)) return undefined;
+      let data;
+      try {
+        data = await readJsonBody(req);
+      } catch (e) {
+        return sendError(res, e);
+      }
+      try {
+        const task = await tasks.startDemo({ lang: data && typeof data === 'object' ? data.lang : undefined });
+        return send(res, 202, { ok: true, task });
+      } catch (e) {
+        return sendTaskError(res, e);
+      }
+    }
+    if (pathname === '/api/tasks') {
+      if (req.method !== 'GET' && req.method !== 'POST') return methodNotAllowed(res, 'GET, POST');
+      if (!runnerGate(req, res)) return undefined;
+      if (req.method === 'GET') return send(res, 200, { ok: true, tasks: await tasks.list() });
+      let data;
+      try {
+        data = await readJsonBody(req);
+      } catch (e) {
+        return sendError(res, e);
+      }
+      if (!data || typeof data !== 'object' || Array.isArray(data)) return send(res, 400, { ok: false, error: t('runner.err.badText') });
+      try {
+        const task = await tasks.startTask({ text: data.text, lang: data.lang });
+        return send(res, 202, { ok: true, task });
+      } catch (e) {
+        return sendTaskError(res, e);
+      }
+    }
+    // /api/tasks/<id>, /api/tasks/<id>/cancel, /api/tasks/<id>/files/<path...>
+    const parts = pathname.split('/'); // ['', 'api', 'tasks', id, ...]
+    const id = parts[3];
+    const rest = parts.slice(4);
+    if (rest.length === 0 || (rest.length === 1 && rest[0] === '')) {
+      if (req.method !== 'GET') return methodNotAllowed(res, 'GET');
+      if (!runnerGate(req, res)) return undefined;
+      const task = TASK_ID_RE.test(id) ? await tasks.get(id) : null;
+      return task ? send(res, 200, { ok: true, task }) : send(res, 404, { ok: false, error: t('runner.err.notFound') });
+    }
+    if (rest.length === 1 && rest[0] === 'cancel') {
+      if (req.method !== 'POST') return methodNotAllowed(res, 'POST');
+      if (!runnerGate(req, res)) return undefined;
+      req.resume();
+      try {
+        return send(res, 200, await tasks.cancel(id));
+      } catch (e) {
+        return sendTaskError(res, e);
+      }
+    }
+    if (rest[0] === 'files' && rest.length >= 2) {
+      if (req.method !== 'GET' && req.method !== 'HEAD') return methodNotAllowed(res, 'GET');
+      if (!runnerGate(req, res)) return undefined;
+      let rel;
+      try {
+        rel = rest.slice(1).map((seg) => decodeURIComponent(seg)).join('/');
+      } catch {
+        return send(res, 400, { ok: false, error: t('runner.err.badPath') });
+      }
+      try {
+        const text = await tasks.readFile(id, rel);
+        return send(res, 200, req.method === 'HEAD' ? '' : text, {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'X-Content-Type-Options': 'nosniff',
+          'Content-Security-Policy': "default-src 'none'; sandbox",
+          'Content-Disposition': 'inline',
+        });
+      } catch (e) {
+        return sendTaskError(res, e);
+      }
+    }
+    return send(res, 404, { ok: false, error: 'Endpoint tidak ada' });
+  }
+
   /** `urlPath`: pathname yang sudah lolos requestPathname (origin-form, tanpa "\" / "%5c" / "%2f" / "//"). */
   async function serveStatic(req, res, urlPath) {
     if (!root) return send(res, 404, 'Not found');
@@ -424,6 +567,9 @@ export function createAiOfficeServer({
         if (pathname === '/api/login' || pathname === '/api/logout') {
           if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Method tidak diizinkan' }, { Allow: 'POST' });
           return pathname === '/api/login' ? await handleLogin(req, res) : await handleLogout(req, res);
+        }
+        if (pathname === '/api/runner' || pathname === '/api/demo' || pathname === '/api/tasks' || pathname.startsWith('/api/tasks/')) {
+          return await handleTasks(req, res, pathname);
         }
         if (pathname === '/api/health' && req.method === 'GET') {
           // Mode token: endpoint publik ini tidak membuka jumlah klien/event.
@@ -511,12 +657,23 @@ export function createAiOfficeServer({
   }, 30000);
   heartbeat.unref();
 
+  const tasks = createTaskService({
+    outputDir: fileURLToPath(new URL('../output/', import.meta.url)),
+    publish: (events) => publish(events),
+    broadcast: (obj) => broadcast(JSON.stringify(obj)),
+    getPort: () => server.address()?.port,
+    enabled: !openMode || runnerEnabled,
+    log,
+    ...taskOptions,
+  });
+
   return {
     server,
     wss,
     history,
     publish,
     usage,
+    tasks,
     listen() {
       return new Promise((ok, fail) => {
         server.once('error', fail);
@@ -534,6 +691,7 @@ export function createAiOfficeServer({
       });
     },
     async close() {
+      await tasks.shutdown().catch(() => {});
       clearInterval(heartbeat);
       offUsage();
       for (const ws of wss.clients) ws.terminate();
