@@ -23,6 +23,17 @@ export const PALETTES = {
     bubbleInk: '#231c2b', bubbleTag: '#5d4f70', bubbleWarnInk: '#3a2a00',
     popup: '#ffe27a', popupShadow: '#2a2333',
     clockFace: '#fffdf5', clockHand: '#2a2333',
+    // Kantor Jakarta (siang): langit, skyline, kaca, pantry, ruang rapat, poster.
+    outline: '#2a2233',
+    skyTop: '#7fc0ee', skyMid: '#a9d8f3', skyLow: '#dcf0f6', farBldg: '#a6c3d8', farBldgHi: '#bdd4e4',
+    nearBldg: '#6e8fae', nearBldgHi: '#8fb0cc', nearBldgLo: '#587896', bldgWin: '#b9d6ea', bldgLit: '#fff2b0',
+    cloud: '#ffffff', cloudLo: '#e3f2fa', rain: '#5f8fc0', rainTint: 'rgba(70,90,110,0.28)', beacon: '#e04848',
+    glassEdge: '#f7fbff', glassSheen: 'rgba(255,255,255,0.22)', roadDim: '#6a7a8a', carA: '#e04848', carB: '#ffffff',
+    counterTop: '#c9a06e', counterTopHi: '#ddb985', counterFront: '#8c5f3a', counterFrontLo: '#734c2c', counterKnob: '#e8c45a',
+    meetFloor: '#9aa6c0', meetFloorLine: '#8793b0', glassWall: 'rgba(190,226,245,0.38)', glassFrame: '#dfe9ef',
+    tableTop: '#a8744a', tableEdge: '#7f5532', acBody: '#eef1f3', acShade: '#c4cbd2', acLed: '#45a85a',
+    posterPaper: '#fff6dc', posterInk: '#3b2a1c', posterFrame: '#6f5b46', signPaper: '#fff6dc', signInk: '#3b2a1c',
+    steam: 'rgba(255,255,255,0.7)',
   },
   dark: {
     night: true,
@@ -43,6 +54,16 @@ export const PALETTES = {
     bubbleInk: '#f4ecdc', bubbleTag: '#c3b8da', bubbleWarnInk: '#ffe9c9',
     popup: '#ffe27a', popupShadow: '#0f0c14',
     clockFace: '#e9e4d6', clockHand: '#2a2333',
+    outline: '#0b0912',
+    skyTop: '#0b1233', skyMid: '#1b2557', skyLow: '#3b3470', farBldg: '#1f2754', farBldgHi: '#2b346a',
+    nearBldg: '#141a3d', nearBldgHi: '#1f2756', nearBldgLo: '#0f1430', bldgWin: '#232b5c', bldgLit: '#ffd98a',
+    cloud: '#3a4478', cloudLo: '#2c3566', rain: '#9fb6e8', rainTint: 'rgba(10,14,40,0.38)', beacon: '#ff5a5a',
+    glassEdge: '#4a4a72', glassSheen: 'rgba(160,180,255,0.12)', roadDim: '#10142e', carA: '#ff6a5a', carB: '#fff1b8',
+    counterTop: '#8a6a48', counterTopHi: '#a07d57', counterFront: '#5f4129', counterFrontLo: '#4a3220', counterKnob: '#e8c45a',
+    meetFloor: '#3d4560', meetFloorLine: '#343b54', glassWall: 'rgba(120,150,220,0.22)', glassFrame: '#5d6684',
+    tableTop: '#7d5736', tableEdge: '#5a3d24', acBody: '#b9bfc9', acShade: '#8b93a0', acLed: '#45a85a',
+    posterPaper: '#f3e7c6', posterInk: '#2b2013', posterFrame: '#2c2538', signPaper: '#f3e7c6', signInk: '#2b2013',
+    steam: 'rgba(255,255,255,0.45)',
   },
 };
 
@@ -59,4 +80,6 @@ export const CONTRAST_PAIRS = [
   ['bubbleInk', 'bubblePaper', 'teks bubble'],
   ['bubbleTag', 'bubblePaper', 'nama proyek di bubble'],
   ['bubbleWarnInk', 'bubbleWarn', 'teks bubble peringatan'],
+  ['posterInk', 'posterPaper', 'teks poster di dinding'],
+  ['signInk', 'signPaper', 'plakat Pantry dan ruang rapat'],
 ];

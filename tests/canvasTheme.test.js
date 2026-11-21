@@ -53,8 +53,8 @@ function setup(theme) {
   const base = created.length;
   const main = makeCanvas(W * 2, H * 2);
   const r = createRenderer(main, { theme });
-  const [pix, bg] = created.slice(base + 1); // urutan pembuatan: pix, lalu bg
-  return { r, main, pix, bg };
+  const [pix, bg, labels] = created.slice(base + 1); // urutan pembuatan: pix, bg, lalu lapisan label
+  return { r, main, pix, bg, labels };
 }
 
 // ------------------------------------------------------------------ palet
@@ -137,7 +137,7 @@ describe('renderer memakai palet tema aktif', () => {
   });
 
   it.each(['light', 'dark'])('meja dan monitor memakai warna meja tema %s; label memakai ink tema itu', (theme) => {
-    const { r, main, pix } = setup(theme);
+    const { r, main, pix, labels } = setup(theme);
     const P = PALETTES[theme];
     const o = new Office();
     o.handleEvent(ev('blocked', 'dev-qa', 'manager', 'macet'), { instant: true });
@@ -149,11 +149,11 @@ describe('renderer memakai palet tema aktif', () => {
     const pixFills = new Set(pix.log.map((e) => e.fill));
     expect(pixFills.has(P.deskTop)).toBe(true);
     expect(pixFills.has(P.chairA)).toBe(true);
-    const texts = main.log.filter((e) => e.op === 'text');
-    expect(texts.find((t) => t.text === 'dev-qa').fill).toBe(P.ink);
+    const texts = [...labels.log, ...main.log].filter((e) => e.op === 'text'); // label di-cache di lapisan sendiri
+    expect(texts.find((t) => t.text === 'Rina · qa').fill).toBe(P.ink);
     expect(texts.find((t) => t.text === 'error').fill).toBe(P.inkSoft);
     expect(texts.find((t) => t.text === 'DIVISI DEV').fill).toBe(P.ink);
-    expect(texts.find((t) => t.text === 'MANAJER').fill).toBe(P.onRug);
+    expect(texts.find((t) => t.text === 'Bu Ratna · MANAJER').fill).toBe(P.onRug);
   });
 
   it.each(['light', 'dark'])('bubble memakai kertas dan tinta tema %s', (theme) => {
@@ -215,7 +215,7 @@ describe('renderer memakai palet tema aktif', () => {
 describe('reduced motion di renderer: dekoratif mati, informasi tetap', () => {
   /** Dua frame pada waktu engine berbeda; kembalikan log lapisan pixel masing-masing. */
   function twoFrames(reduced, theme = 'dark') {
-    const { r, pix, main } = setup(theme);
+    const { r, pix, main, labels } = setup(theme);
     const o = new Office();
     o.setReducedMotion(reduced);
     o.handleEvent(ev('blocked', 'dev-qa', 'manager', 'macet'), { instant: true });
@@ -228,7 +228,7 @@ describe('reduced motion di renderer: dekoratif mati, informasi tetap', () => {
     pix.log.length = 0;
     main.log.length = 0;
     r.draw(o, 1_700_000_000_000);
-    return { a, b: JSON.stringify(pix.log), mainLog: main.log, pixLog: [...pix.log] };
+    return { a, b: JSON.stringify(pix.log), mainLog: [...labels.log, ...main.log], pixLog: [...pix.log] };
   }
 
   it('tanpa reduced motion: kedip, titik mengetik, dan gerak masuk penanda mengubah gambar antar frame', () => {

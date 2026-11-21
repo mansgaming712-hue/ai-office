@@ -1,6 +1,8 @@
 // Tata letak kantor dalam koordinat logis (piksel pixel-art, 1 unit = 1 piksel art).
-// Manajer di depan (atas), divisi di bawahnya. Semua karakter duduk di belakang meja menghadap ke bawah;
-// titik "front" adalah tempat manajer berdiri saat memberi tugas (lorong di bawah meja).
+// Kantor lantai atas di kawasan SCBD/Sudirman, Jakarta. Dinding atas berisi jendela kaca besar (skyline), pintu CEO,
+// papan tulis, jam, poster, dan AC split. Di bawahnya: pantry (kiri), karpet manajer (tengah), ruang rapat kaca (kanan),
+// lalu divisi. Semua karakter duduk di belakang meja menghadap ke bawah; titik "front" adalah tempat manajer berdiri
+// saat memberi tugas (lorong di bawah meja).
 //
 //   baris 1: Divisi Dev (7) | Marketing & Sales (3)
 //   baris 2: Konten (2) | Riset (1) | Divisi 3D (4, klaster 2x2)
@@ -8,55 +10,82 @@
 import { DIVISIONS, OTHER_DIVISION } from '../../shared/roster.js';
 
 export const W = 480;
-export const H = 408;
+export const H = 456;
 export const CELL = 8;
-export const WALL_H = 28;
+export const WALL_H = 60;
+/** Selisih vertikal antara titik logis karakter (pinggang) dan telapak kaki sprite 16x24. */
+export const FOOT = 7;
 
-export const DOOR = { x: 18, y: 4, w: 24, h: 24, enter: { x: 30, y: 38 } };
+export const DOOR = { x: 18, y: 34, w: 24, h: 24, enter: { x: 30, y: 72 } };
 
 export const MANAGER_SPOT = {
-  seat: { x: 240, y: 50 },
-  desk: { x: 212, y: 52, w: 56, h: 16 },
-  inbox: { x: 258, y: 55 },
-  rug: { x: 184, y: 30, w: 112, h: 52 },
+  seat: { x: 240, y: 82 },
+  desk: { x: 212, y: 84, w: 56, h: 16 },
+  inbox: { x: 258, y: 87 },
+  rug: { x: 184, y: 62, w: 112, h: 52 },
 };
+
+// Jendela kaca besar (kiri di atas pantry, kanan di atas ruang rapat) dan elemen dinding. Dipakai renderer.
+export const WINDOWS = [
+  { x: 52, y: 7, w: 120, h: 38 },
+  { x: 308, y: 7, w: 126, h: 38 },
+];
+export const WALL_ITEMS = {
+  ac: { x: 186, y: 3, w: 44, h: 9 },
+  board: { x: 180, y: 15, w: 46, h: 26 },
+  clock: { x: 240, y: 25 },
+  posters: [
+    { x: 256, y: 12, w: 24, h: 32, key: 'office.poster.1' },
+    { x: 284, y: 12, w: 24, h: 32, key: 'office.poster.2' },
+  ],
+  meetBoard: { x: 440, y: 12, w: 30, h: 28 },
+};
+
+// Pantry: dispenser galon + meja counter. Titik berdiri (pinggang) untuk agen yang ngopi.
+export const PANTRY = {
+  counter: { x: 76, y: 46, w: 92, h: 26 },
+  dispenser: { x: 58, y: 34, w: 16, h: 38 },
+  slots: [{ x: 98, y: 80 }, { x: 120, y: 80 }, { x: 142, y: 80 }],
+};
+
+export const MEETING = { x: 316, y: 58, w: 158, h: 68 };
 
 export const ZONES = {
   dev: {
-    rect: { x: 8, y: 100, w: 304, h: 116 },
-    seats: [[44, 128], [116, 128], [188, 128], [260, 128], [80, 182], [152, 182], [224, 182]],
+    rect: { x: 8, y: 132, w: 304, h: 124 },
+    seats: [[44, 166], [116, 166], [188, 166], [260, 166], [80, 222], [152, 222], [224, 222]],
   },
   sales: {
-    rect: { x: 320, y: 100, w: 152, h: 116 },
-    seats: [[356, 128], [436, 128], [396, 182]],
+    rect: { x: 320, y: 132, w: 152, h: 124 },
+    seats: [[356, 166], [436, 166], [396, 222]],
   },
   content: {
-    rect: { x: 8, y: 222, w: 152, h: 112 },
-    seats: [[44, 250], [116, 250]],
+    rect: { x: 8, y: 262, w: 152, h: 120 },
+    seats: [[44, 296], [116, 296]],
   },
   research: {
-    rect: { x: 168, y: 222, w: 144, h: 112 },
-    seats: [[240, 250]],
+    rect: { x: 168, y: 262, w: 144, h: 120 },
+    seats: [[240, 296]],
   },
   // Klaster meja 3D (2x2). Kunci '3d' bukan identifier JS: akses lewat ZONES['3d'].
   '3d': {
-    rect: { x: 320, y: 222, w: 152, h: 112 },
-    seats: [[356, 250], [436, 250], [356, 300], [436, 300]],
+    rect: { x: 320, y: 262, w: 152, h: 120 },
+    seats: [[356, 296], [436, 296], [356, 346], [436, 346]],
   },
   other: {
-    rect: { x: 8, y: 340, w: 464, h: 62 },
-    seats: [[96, 368], [168, 368], [240, 368], [312, 368], [384, 368]],
+    rect: { x: 8, y: 388, w: 464, h: 62 },
+    seats: [[96, 416], [168, 416], [240, 416], [312, 416], [384, 416]],
   },
 };
 
 // Dekorasi yang juga menjadi penghalang jalan.
 export const DECOR = [
-  { kind: 'plant', x: 54, y: 30, w: 12, h: 16 },
-  { kind: 'shelf', x: 110, y: 16, w: 44, h: 20 },
-  { kind: 'printer', x: 330, y: 30, w: 22, h: 14 },
-  { kind: 'cooler', x: 444, y: 28, w: 14, h: 22 },
-  { kind: 'plant', x: 462, y: 78, w: 12, h: 16 },
-  { kind: 'plant', x: 4, y: 78, w: 12, h: 16 },
+  { kind: 'dispenser', ...PANTRY.dispenser },
+  { kind: 'counter', ...PANTRY.counter },
+  { kind: 'meeting', ...MEETING },
+  { kind: 'plant', x: 4, y: 100, w: 12, h: 16 },
+  { kind: 'plant', x: 172, y: 98, w: 12, h: 16 },
+  { kind: 'plant', x: 300, y: 100, w: 12, h: 16 },
 ];
 
 export function workstation(sx, sy) {
@@ -64,6 +93,7 @@ export function workstation(sx, sy) {
     seat: { x: sx, y: sy },
     desk: { x: sx - 16, y: sy + 2, w: 32, h: 14 },
     front: { x: sx, y: sy + 28 },
+    exit: { x: sx + 24, y: sy + 4 }, // titik bangun dari kursi (di samping meja) saat agen berjalan ke pantry
     hit: { x: sx - 18, y: sy - 20, w: 36, h: 38 },
   };
 }
