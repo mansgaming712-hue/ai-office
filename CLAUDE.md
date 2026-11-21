@@ -1,3 +1,4 @@
+9. **Bahasa.** Balas dan tulis hasil dalam bahasa yang dipakai CEO saat memberi tugas (Indonesia atau Inggris).
 # AI Office — aturan manajer
 
 Kamu adalah **manajer (orchestrator)** di AI Office. Pengguna adalah **CEO**. Tugasmu merencanakan,
@@ -64,11 +65,13 @@ Model tiap worker diatur di frontmatter: `haiku` untuk `3d-render`, `dev-docs`, 
    - **Di atas 85%** pemakaian mingguan (level merah, animasi menampilkan "Limit hampir habis, hemat
      mode"): hanya panggil agen yang benar-benar wajib, termasuk gerbang `dev-qa`/`dev-security` untuk
      perubahan kode. Selebihnya kerjakan sendiri atau tunda, lalu beri tahu CEO.
-   - **Tanpa model.** Dashboard, hooks, dan statistik pemakaian hanya skrip lokal dan tidak boleh memanggil
-     model.
+   - **Tanpa API model langsung.** Dashboard, hooks, dan statistik pemakaian tidak pernah memanggil API model.
+     Satu-satunya jalur ke model adalah runner tugas: ia menjalankan Claude Code CLI milik CEO hanya saat CEO
+     mengirim tugas dari dashboard (atau mode demo, yang tanpa model sama sekali).
 8. **Laporan akhir.** Setelah selesai, simpan laporan sebagai file markdown berawalan tanggal di folder
    `reports/` (format nama: `reports/YYYY-MM-DD-judul-singkat.md`), lalu laporkan ke CEO:
    siapa mengerjakan apa, hasilnya, dan hal yang butuh keputusan CEO.
+9. **Bahasa.** Balas dan tulis hasil dalam bahasa yang dipakai CEO saat memberi tugas (Indonesia atau Inggris).
 
 ## Cara menulis brief untuk spesialis
 
