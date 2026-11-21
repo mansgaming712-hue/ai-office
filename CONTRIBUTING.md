@@ -146,6 +146,225 @@ An agent is a Markdown file with frontmatter. The roster must list the same name
 5. Mention the new agent in the pull request. If it changes the Agents table, update the English section of `README.md`,
    the Indonesian section of `README.md`, and `README.id.md` (both Indonesian copies must match).
 
+## Adding a division
+
+A division is a folder of plain data that adds a group of worker agents to the office. The server reads it once, when
+it starts. This repository ships with no active division. Your own divisions live in `divisions/`, and you commit them
+only in your fork if you choose to.
+
+### Folder structure
+
+```text
+divisions/
+  legal/                      folder name = division id
+    division.json             manifest (required)
+    agents/
+      legal-reviewer.md       one file per worker: <worker>.md
+      legal-drafter.md
+```
+
+Plain files directly in `divisions/` (such as `README.md`) and folders whose names start with a dot are ignored.
+
+### division.json
+
+```json
+{
+  "id": "legal",
+  "name": { "en": "Legal", "id": "Hukum" },
+  "color": "#8a5a44",
+  "desks": 3,
+  "workers": ["legal-reviewer", "legal-drafter"],
+  "description": "Optional, at most 200 characters"
+}
+```
+
+| Field | Required | Rules |
+| --- | --- | --- |
+| `id` | yes | 2 to 32 characters: a lowercase letter first, then lowercase letters, digits, or hyphens (`^[a-z][a-z0-9-]{1,31}$`). Must equal the folder name. Must not be a built-in id: `dev`, `sales`, `content`, `research`, `3d`, `other`, `manager`, `ceo`. Must not be a Windows device name (see below). |
+| `name` | yes | Either a string (used in both languages) or an object `{ "en": "...", "id": "..." }`. In the object form, `id` is optional and defaults to `en`. Each text is 1 to 40 characters after trimming, with no control, invisible, or bidirectional characters. No other keys are allowed. |
+| `color` | yes | Hex colour `#rrggbb` (six hex digits). Stored in lowercase. |
+| `desks` | yes | Whole number from 1 to 8. Must not be less than the number of workers. |
+| `workers` | yes | List of 1 to 8 worker names. See the worker rules below. |
+| `description` | no | Text of at most 200 characters, with no control or invisible characters. |
+
+The file is at most 16 KB and must contain a JSON object. A field that is not in the table makes the division invalid.
+One problem anywhere in the division (the manifest or any worker file) makes the whole division invalid, and the server
+skips it. It never loads half of a division.
+
+### Worker names and worker files
+
+Worker names:
+
+- Lowercase letters, digits, and hyphens, starting with a letter or digit (`^[a-z0-9][a-z0-9-]*$`), at most 64 characters.
+- Unique inside the division and across all divisions. Divisions are read in folder-name order. A name already used by
+  an earlier division is rejected (`workerTaken`).
+- Not a built-in agent name from `shared/roster.js`, and not `other`, `manager`, or `ceo`.
+- Not a Windows device name: `con`, `nul`, `prn`, `aux`, `com0` to `com9`, or `lpt0` to `lpt9`. The same rule applies to
+  division ids.
+- A convention that the server does not enforce: start each name with the division id (`legal-reviewer`).
+
+Worker files `agents/<worker>.md`:
+
+- The file name is `<worker>.md`, and the `name` field in the frontmatter must be the same worker name.
+- The frontmatter may contain only `name`, `description`, `tools`, and `model`. Any other key (for example `hooks`,
+  `mcpServers`, or `permissionMode`) is rejected, because it could install hooks or permissions in `~/.claude`. The same
+  rule applies to the built-in agents in `agents/`; `npm run agents:validate` and the test suite check it.
+- The frontmatter fields `name`, `description`, `tools`, and `model` are required. `description` is at least 80 characters.
+- `model` is `haiku` or `sonnet`.
+- `tools` is a comma-separated list with no duplicates, taken from `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Bash`,
+  `PowerShell`, `WebSearch`, `WebFetch`, `NotebookEdit`, and `TodoWrite`. `Agent` and `Task` are not allowed, so a worker
+  cannot call another agent.
+- Tool risk: `Read`, `Glob`, `Grep`, `Write`, `Edit`, `WebSearch`, and `TodoWrite` are the safe tools for plugin workers.
+  Any other tool (`Bash`, `PowerShell`, `WebFetch`, `NotebookEdit`, and so on) is risky. See "Installing plugin workers".
+- The body must contain these phrases exactly: `Fokus hanya pada keahlianmu`,
+  `berhenti dan laporkan ke manajer apa yang kurang dan agen siapa yang dibutuhkan`, `Jangan mencoba memanggil agen lain`,
+  `STATUS: SELESAI`, and `STATUS: BUTUH BANTUAN`. The easiest way is to copy the rules sections from any file in `agents/`.
+- The file is at most 64 KB.
+
+### Limits
+
+| Limit | Value | What happens above it |
+| --- | --- | --- |
+| Plugin divisions | 12 | The extra valid divisions are reported as an error and not loaded. Built-in divisions are not counted. |
+| Workers per division | 1 to 8 | The division is invalid. |
+| Desks per division | 1 to 8 | The division is invalid. |
+| `division.json` | 16 KB | The division is invalid. |
+| `agents/<worker>.md` | 64 KB | The division is invalid. |
+| Folders examined per scan | 100 | The remaining folders are reported as one error. |
+
+The dashboard places the desks three per row. Two plugin divisions sit side by side below the Guest zone.
+
+### Packs are data, not code
+
+The server reads `division.json` and the agent files as text. It parses the JSON and validates it (`shared/divisions.js`
+and `server/divisions.js`). AI Office never imports, requires, evaluates, or executes anything from a division. Symbolic
+links and junctions are refused, and every file must resolve inside its own division folder.
+
+Worker files do have an effect outside AI Office. `npm run agents:install` copies them to `~/.claude/agents`, where Claude
+Code loads them as subagents with the tools listed in `tools:`. The validator allows `Bash` and `PowerShell`, so the
+install step is the place where risky tools are checked. Read every worker file before you install it, and review a pack
+written by someone else the way you would review code.
+
+### Installing plugin workers
+
+```bash
+npm run agents:install                                    # installs safe workers; skips new or changed risky workers (exit code 3)
+npm run agents:install -- --allow-risky-tools             # approves and installs the risky workers it lists
+npm run agents:install -- --allow-risky-tools --force     # also updates an approved risky worker whose file changed
+npm run agents:install -- --force                         # overwrites only files that AI Office installed and you have not changed
+```
+
+- A plugin worker that uses only safe tools is installed without a flag.
+- A plugin worker that fails validation is never treated as safe. It is skipped with a warning, and the command exits
+  with code `3`.
+- A risky worker is one that uses any tool outside the safe list. Approval is tied to the content of the file, not to its
+  name. With `--allow-risky-tools`, the command prints each risky worker with the first 12 characters of its SHA-256 hash
+  before it writes anything, then records the full hash under `approvedRisky` in
+  `~/.claude/agents/.ai-office-installed.json`.
+- Without the flag, a risky worker is installed only if its current hash matches an approval. A risky worker that is new,
+  or whose file changed after approval, is skipped with a warning, its file stays in the division folder, and the command
+  exits with code `3`.
+- To update an approved risky worker whose file changed, read the new file, then run `--allow-risky-tools --force`. Force
+  still never overwrites a file that you changed yourself.
+- `npm run agents:validate` labels each risky plugin worker with `[RISKY: ...]`.
+- Built-in agents are not affected by the tool policy.
+- `--force` overwrites a file only when `~/.claude/agents/.ai-office-installed.json` lists it and the file on disk still
+  has the hash that AI Office recorded. Files you wrote or changed yourself are never overwritten; the command reports
+  them and skips them.
+- `npm run setup` runs every step. When `agents:install` exits with code `3`, setup finishes and exits with code `3` too,
+  and it names the risky workers it could identify at the end. Check the `agents:install` output for the full list.
+
+### Worked example: `example-legal`
+
+The starter pack `division-packs/example-legal` has two workers and works as a template. It is not legal advice.
+
+1. Preview the result. Nothing is written:
+
+   ```bash
+   npm run division:add legal -- --from example-legal --dry-run
+   ```
+
+   The output lists `divisions/legal/division.json`, `divisions/legal/agents/legal-reviewer.md`, and
+   `divisions/legal/agents/legal-drafter.md`.
+
+2. Create the division. The command refuses to write into a folder that already exists:
+
+   ```bash
+   npm run division:add legal -- --from example-legal
+   ```
+
+   The copy takes its colour, desk count, and description from the starter, and renames the workers to `legal-*`.
+   The name is set to `Legal` in both languages.
+
+3. Optional: edit `divisions/legal/division.json` to set your own names, colour, or desks, for example
+   `"name": { "en": "Legal", "id": "Hukum" }`.
+
+4. Install the worker files. Both files use only safe tools, so no flag is needed and the command exits with code 0:
+
+   ```bash
+   npm run agents:install
+   ```
+
+5. Validate. The output ends with a summary line when every agent is valid, unique, and installed:
+
+   ```bash
+   npm run agents:validate
+   ```
+
+6. Restart the server. Stop the running server first, then start it again:
+
+   ```bash
+   npm start
+   ```
+
+7. Check the API and the dashboard. In local mode:
+
+   ```bash
+   curl http://localhost:3000/api/divisions
+   ```
+
+   ```powershell
+   Invoke-RestMethod http://localhost:3000/api/divisions
+   ```
+
+   In token mode, add the header `Authorization: Bearer <your-token>`. The response contains a `legal` entry with
+   `"source": "plugin"`, three desks, the two workers, and an empty `errors` list. On the dashboard, the Legal zone
+   appears below the Guest zone.
+
+To remove a division, delete its folder and restart the server. The files already installed in `~/.claude/agents` stay
+there. Delete the matching `<worker>.md` files yourself.
+
+### How to test
+
+```bash
+npm run division:add <id> -- --from <starter> --dry-run   # preview, writes nothing
+npm run agents:install                                     # copy the worker files (exit code 3 if a risky tool was skipped)
+npm run agents:validate                                    # check the repo and installed agent files; exit code 1 on problems
+npm test                                                   # full suite, including the division tests
+```
+
+Run `npm run agents:install` before `npm run agents:validate`. The validator also checks that each plugin agent is
+installed, so it exits with code 1 until the install is done. Then restart the server (`npm start`) and check
+`GET /api/divisions` and the dashboard, as in step 7 of the example.
+
+### Sending a new starter pack
+
+Starter packs live in `division-packs/`. A pack uses the same format as a division, so `--from` copies it directly.
+
+1. Create `division-packs/<id>/division.json` and `division-packs/<id>/agents/<worker>.md`, following the rules above.
+   The folder name is the id.
+2. Start every worker name with the id, for example `<id>-<role>`. The existing tests require this, and `--from` renames
+   workers based on this prefix.
+3. Give each pack 2 to 3 workers. The tests check this range. Declare only the tools a worker needs. A pack with a risky
+   tool is still valid, but `division:add --from` prints a warning, and its risky workers install only after approval
+   with `--allow-risky-tools`. The `dev-team` pack (Bash) and the `research-team` pack (WebFetch) are current examples.
+4. Check the pack with a dry run under a test id:
+   `npm run division:add <test-id> -- --from <id> --dry-run`. If the pack is invalid, the command prints the reason.
+5. Add the new id to the test lists that name the packs: the list in `tests/divisions.test.js` (the test that checks
+   that exactly four packs exist, which you also rename) and the `it.each` list in `tests/divisionAdd.test.js`.
+   Without this change, `npm test` fails.
+6. Run `npm test`, then open a pull request that describes the pack and what it is for.
+
 ## Good first issues
 
 Issues labelled `good first issue` are small and self-contained. Each one lists the files involved and the
