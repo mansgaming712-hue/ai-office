@@ -1,4 +1,5 @@
 import { useLang } from '../i18n.js';
+import { stageCardBottom } from '../office/fit.js';
 import { BANNER_TEXT, EMPTY_TEXT, LOADING_TEXT } from '../viewState.js';
 import { OfficeSkeleton, PixelSpinner } from './Skeleton.jsx';
 
@@ -20,8 +21,9 @@ export function LoadingNotice() {
 /** Kantor terhubung tapi belum ada kejadian: jelaskan dan beri dua jalan keluar. */
 export function EmptyCard({ onSimulate }) {
   useLang();
+  const bottom = stageCardBottom();
   return (
-    <section className="stage-card" aria-labelledby="empty-title">
+    <section className="stage-card" aria-labelledby="empty-title" style={bottom ? { bottom } : undefined}>
       <h2 id="empty-title" className="notice-title">{EMPTY_TEXT.title}</h2>
       <p className="notice-body">{EMPTY_TEXT.body}</p>
       <div className="stage-card-row">

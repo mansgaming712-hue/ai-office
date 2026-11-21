@@ -1,0 +1,14 @@
+{
+  "id": "example-legal",
+  "name": {
+    "en": "Legal",
+    "id": "Hukum"
+  },
+  "color": "#8a5a44",
+  "desks": 3,
+  "workers": [
+    "example-legal-reviewer",
+    "example-legal-drafter"
+  ],
+  "description": "Contoh divisi buatan pengguna untuk CONTRIBUTING. Bukan nasihat hukum."
+}

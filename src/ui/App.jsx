@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState, useSyncExternalStore } from 'react';
 import { divisionName, getLang, intlLocale, t, useLang } from '../i18n.js';
 import { DIVISIONS, OTHER_DIVISION } from '../../shared/roster.js';
+import { applyDivisionsResponse, getState as getDivisionsState, subscribe as subscribeDivisions } from '../divisions.js';
 import { STATUS_INFO, STATUS_LABEL, UI_STATUSES, countStatuses, summaryText, uiStatusOf } from '../agentStatus.js';
 import { parseCommand } from '../command.js';
 import { Office } from '../office/engine.js';
-import { cancelTask, connect, getRunner, getUsage, listTasks, postDemo, postEvents, postTask } from '../net.js';
+import { cancelTask, connect, getDivisions, getRunner, getUsage, listTasks, postDemo, postEvents, postTask } from '../net.js';
 import { ACTIVE_WINDOW_MS, activeSessions, ago, dropSimSessions, projectOf, trackSession } from '../sessions.js';
 import { playScenario } from '../sim/scenario.js';
 import { isTaskId, reasonNotice, tasksReducer } from '../tasks.js';
@@ -13,6 +14,7 @@ import { CONN_LABEL, initialLink, linkReducer, stageState } from '../viewState.j
 import OfficeCanvas from './OfficeCanvas.jsx';
 import { PanelSkeleton } from './Skeleton.jsx';
 import { ConnectionBanner, EmptyCard, LoadingNotice } from './StageNotices.jsx';
+import DivisionsNotice from './DivisionsNotice.jsx';
 import LangToggle from './LangToggle.jsx';
 import StatusIcon from './StatusIcon.jsx';
 import TaskPanel from './TaskPanel.jsx';
@@ -53,6 +55,7 @@ export default function App({ authRequired = false, onRecheckSession, onLogout }
   if (!officeRef.current) officeRef.current = new Office();
   const office = officeRef.current;
 
+  const rosterState = useSyncExternalStore(subscribeDivisions, getDivisionsState, getDivisionsState);
   const [log, setLog] = useState([]);
   const [link, dispatchLink] = useReducer(linkReducer, initialLink);
   const { theme, toggle: toggleTheme } = useTheme();
@@ -132,6 +135,28 @@ export default function App({ authRequired = false, onRecheckSession, onLogout }
     });
     return undefined;
   }, [link.conn]);
+
+  // Divisi plugin dari server. Gagal (server lama, jaringan, simulasi) → roster bawaan tetap persis seperti sekarang.
+  useEffect(() => {
+    if (link.conn === 'offline') return undefined;
+    let alive = true;
+    getDivisions().then(({ status, body }) => {
+      if (alive) applyDivisionsResponse(status, body);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [link.conn]);
+
+  // Roster berubah: hitung ulang meja di engine dan segarkan daftar status.
+  useEffect(() => {
+    const sync = () => {
+      office.syncRoster();
+      setStatuses(statusesOf(office));
+    };
+    if (rosterState.version > 0) sync();
+    return subscribeDivisions(sync);
+  }, [office]);
 
   // Koneksi ke server event (hooks Claude Code)
   useEffect(() => {
@@ -375,7 +400,7 @@ export default function App({ authRequired = false, onRecheckSession, onLogout }
     inputRef.current?.focus();
   };
 
-  const groups = [...DIVISIONS, OTHER_DIVISION]
+  const groups = [...DIVISIONS, ...rosterState.plugin, OTHER_DIVISION]
     .map((d) => ({ ...d, members: Object.entries(statuses).filter(([, s]) => s.division === d.id) }))
     .filter((g) => g.members.length);
   const counts = countStatuses(statuses);
@@ -455,6 +480,8 @@ export default function App({ authRequired = false, onRecheckSession, onLogout }
           onView={setViewerId}
           onCancel={cancel}
         />
+
+        <DivisionsNotice errors={rosterState.errors} />
 
         <section className="roster" aria-label={t('ui.roster.aria')} aria-busy={loading}>
           {loading ? (

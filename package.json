@@ -30,6 +30,7 @@
     "smoke": "node scripts/smoke.mjs",
     "agents:install": "node scripts/install-agents.mjs",
     "agents:validate": "node scripts/validate-agents.mjs",
+    "division:add": "node scripts/division-add.mjs",
     "demo:hooks": "node scripts/demo-hooks.mjs",
     "hooks:install-user": "node scripts/install-user-hooks.mjs",
     "hooks:uninstall-user": "node scripts/uninstall-user-hooks.mjs",
@@ -46,13 +47,13 @@
     "@fontsource/vt323": "^5.3.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "ws": "^8.22.1"
+    "ws": "^8.22.1",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.2.1",
     "vite": "^8.3.6",
-    "vitest": "^5.1.0",
-    "yaml": "^2.9.1"
+    "vitest": "^5.1.0"
   },
   "license": "MIT"
 }

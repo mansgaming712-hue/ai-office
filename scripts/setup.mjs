@@ -15,6 +15,8 @@ import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { t } from '../shared/i18n.js';
+import { RISKY_EXIT_CODE } from './agent-files.mjs';
+import { discoverDivisions, divisionsDirFromEnv, riskyPluginAgents } from '../server/divisions.js';
 import { nodeVersionProblem } from '../server/nodeVersion.js';
 import { detectVersion, findClaude } from '../server/runner.js';
 
@@ -99,6 +101,7 @@ export async function runSetup(argv = process.argv.slice(2), opts = {}) {
   log(t('setup.intro'));
   if (args.dryRun) log(t('setup.dryRun'));
   let claude = null;
+  let riskyStatus = 0; // agents:install melaporkan agen plugin berisiko yang dilewati: setup lanjut, tapi diringkas di akhir
   for (let i = 0; i < steps.length; i++) {
     const step = steps[i];
     const name = t(`setup.s.${step.id}`);
@@ -132,6 +135,10 @@ export async function runSetup(argv = process.argv.slice(2), opts = {}) {
     }
     const r = await run(npm.command, [...npm.prefix, ...step.args], { cwd: projectDir, shell: npm.shell, env });
     if (r.error) return fail(t('setup.spawnError', { code: r.error.code ?? r.error.message }));
+    if (step.id === 'agents' && r.status === RISKY_EXIT_CODE) {
+      riskyStatus = RISKY_EXIT_CODE;
+      continue;
+    }
     if (r.status !== 0) return fail(t('setup.exitCode', { code: r.status }));
   }
 
@@ -142,6 +149,12 @@ export async function runSetup(argv = process.argv.slice(2), opts = {}) {
   log(t('setup.next2'));
   log(t('setup.next3'));
   if (args.noClaude) log(t('setup.nextNoClaude'));
+  if (riskyStatus) {
+    const skipped = (opts.riskyAgents ?? (() => riskyPluginAgents(discoverDivisions({ dir: divisionsDirFromEnv(env) }))))();
+    err(`
+${t('setup.agentsRisky', { n: skipped.length, names: skipped.map((a) => a.worker).join(', ') || '?' })}`);
+    return riskyStatus;
+  }
   return 0;
 }
 

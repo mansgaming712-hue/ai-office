@@ -50,6 +50,8 @@ export async function startRunnerApp({ mode = 'success', opts = {}, env = {}, ta
       body,
     });
   const fakeLog = () => JSON.parse(readFileSync(logFile, 'utf8'));
+  /** Tunggu CLI tiruan menulis log (pid/cucu) secara utuh. */
+  const waitFakeLog = (opts) => waitFor(() => fakeLog(), { what: 'log CLI tiruan', ...opts });
   /** Tunggu sampai status tugas bukan "running". */
   async function waitDone(id, { timeoutMs = 10000, key = KEY } = {}) {
     const t0 = Date.now();
@@ -60,8 +62,34 @@ export async function startRunnerApp({ mode = 'success', opts = {}, env = {}, ta
       await sleep(40);
     }
   }
-  return { ...srv, tmp, outputDir, logFile, headers, api, fakeLog, waitDone, close: async () => { await srv.close(); tmp.cleanup(); } };
+  return { ...srv, tmp, outputDir, logFile, headers, api, fakeLog, waitFakeLog, waitDone, close: async () => { await srv.close(); tmp.cleanup(); } };
 }
 
 /** Kumpulkan event dari riwayat server (ditambah pesan WebSocket bila perlu). */
 export const eventsOf = (srv, id) => srv.app.history.filter((e) => e.task === id);
+
+/** Tunggu sampai `cond()` truthy (polling), bukan jeda tetap: deterministik saat mesin sibuk. */
+export async function waitFor(cond, { timeoutMs = 20000, stepMs = 25, what = 'kondisi' } = {}) {
+  const t0 = Date.now();
+  for (;;) {
+    let v;
+    try {
+      v = await cond();
+    } catch {
+      v = false; // mis. file log belum ada atau baru separuh tertulis
+    }
+    if (v) return v;
+    if (Date.now() - t0 > timeoutMs) throw new Error(`waitFor: ${what} tidak terpenuhi dalam ${timeoutMs} ms`);
+    await sleep(stepMs);
+  }
+}
+
+/** Proses `pid` masih hidup? */
+export function pidAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}

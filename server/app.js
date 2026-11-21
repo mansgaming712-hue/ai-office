@@ -5,6 +5,7 @@
 //   GET  /api/events   riwayat event terakhir
 //   GET  /api/usage    statistik pemakaian token (estimasi lokal, lihat server/usage.js)
 //   GET  /api/health   status server
+//   GET  /api/divisions divisi plugin (folder divisions/, opsi `divisions` = hasil discoverDivisions); auth seperti /api/usage
 //   GET  /api/session  { ok, authRequired, authenticated }
 //   POST /api/login    body { token } → cookie aio_session (mode token)
 //   GET  /api/runner, POST /api/tasks, POST /api/demo, GET /api/tasks[/<id>[/files/<path>]], POST /api/tasks/<id>/cancel
@@ -48,6 +49,7 @@ import { WebSocketServer } from 'ws';
 import { TASK_ID_RE, normalizeBatch } from '../shared/events.js';
 import { t } from '../shared/i18n.js';
 import { createAuth, createLoginLimiter, resolveAuthMode, safeEqual } from './auth.js';
+import { publicDivisions } from './divisions.js';
 import { StoreError } from './outputStore.js';
 import { TaskError, createTaskService } from './tasks.js';
 import { REASONS, unavailableUsage } from './usage.js';
@@ -84,6 +86,7 @@ export function createAiOfficeServer({
   runnerKey = null,
   runnerEnabled = false,
   taskOptions = {},
+  divisions = null, // hasil discoverDivisions() (server/divisions.js); null = tanpa divisi plugin
   log = () => {},
 } = {}) {
   // Mode terbuka (bukan loopback / allowedHosts / trustProxy) tanpa token ≥ 32 karakter ditolak,
@@ -559,6 +562,12 @@ export function createAiOfficeServer({
           if (auth.enabled && !auth.check(req).ok) return sendUnauthorized(res);
           if (req.method !== 'GET') return send(res, 405, { ok: false, error: 'Method tidak diizinkan' }, { Allow: 'GET' });
           return send(res, 200, { ok: true, usage: usageSnapshot() });
+        }
+        if (pathname === '/api/divisions') {
+          // Hasil penemuan divisi plugin saat server mulai (server/divisions.js). Aturan auth sama dengan /api/usage.
+          if (auth.enabled && !auth.check(req).ok) return sendUnauthorized(res);
+          if (req.method !== 'GET') return send(res, 405, { ok: false, error: 'Method tidak diizinkan' }, { Allow: 'GET' });
+          return send(res, 200, { ok: true, ...publicDivisions(divisions ?? { divisions: [], errors: [] }) });
         }
         if (pathname === '/api/session') {
           if (req.method !== 'GET') return send(res, 405, { ok: false, error: 'Method tidak diizinkan' }, { Allow: 'GET' });

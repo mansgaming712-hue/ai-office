@@ -79,7 +79,8 @@ function ps(script) {
   return { code: r.status, out: (r.stdout ?? '').trim(), err: (r.stderr ?? '').trim() };
 }
 
-describe.skipIf(!PWSH)('pemeriksa pemilik (PowerShell sungguhan, input dummy)', () => {
+// Tiap test memanggil PowerShell sungguhan (start ~1-3 dtk, lebih lambat saat mesin sibuk): batas waktu dilonggarkan.
+describe.skipIf(!PWSH)('pemeriksa pemilik (PowerShell sungguhan, input dummy)', { timeout: 60000 }, () => {
   it('Resolve-AiOwnerState: same / other / unknown', () => {
     const r = ps(
       "$a = Resolve-AiOwnerState 'PC\\alice' 'pc\\ALICE'; $b = Resolve-AiOwnerState 'PC\\bob' 'PC\\alice'; " +

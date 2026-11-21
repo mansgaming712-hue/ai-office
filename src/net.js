@@ -256,6 +256,11 @@ export async function cancelTask(id) {
   return status === 200 && body?.ok === true;
 }
 
+/** GET /api/divisions → { status, body } mentah (status null = gagal). Divalidasi pemanggil (src/divisions.js). */
+export function getDivisions() {
+  return runnerRequest('/api/divisions');
+}
+
 /** GET /api/tasks → { ok, tasks }. */
 export async function listTasks() {
   const { status, body } = await runnerRequest('/api/tasks');

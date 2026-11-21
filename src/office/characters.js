@@ -1,7 +1,8 @@
 // Data karakter kantor: nama orang Indonesia dan penampilan tiap agen (kulit, rambut, aksesori).
 // Warna baju mengikuti warna divisi (shared/roster.js). Nama tampil lewat t() (`office.char.<id>`),
 // jadi bisa dibedakan per bahasa; saat ini sama di EN dan ID. Semua desain dibuat sendiri.
-import { CEO_ID, MANAGER_ID, divisionOf } from '../../shared/roster.js';
+import { CEO_ID, MANAGER_ID } from '../../shared/roster.js';
+import { divisionOf } from '../divisions.js';
 import { hasKey, t } from '../i18n.js';
 
 // Palet karakter terbatas (sama di kedua tema; hanya garis tepi yang mengikuti tema).

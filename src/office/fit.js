@@ -1,6 +1,6 @@
 // Ukuran kanvas kantor: muat di ruang yang tersedia dengan rasio tetap. Di layar besar, skala dibulatkan
 // ke kelipatan bulat piksel perangkat (piksel pixel-art sama besar, tajam) selama kehilangan ruangnya kecil.
-import { H, W } from './layout.js';
+import { BASE_H, H, W } from './layout.js';
 
 /** Ruang yang dipakai bingkai (border + bayangan) di sekeliling kanvas, per sumbu, dalam px CSS. */
 export const FRAME_PAD = 24;
@@ -27,4 +27,14 @@ export function fitCanvas({ availW, availH, dpr = 1, logicalW = W, logicalH = H 
   }
   const cssW = Math.floor(fitW);
   return { cssW, cssH: Math.floor((cssW * logicalH) / logicalW), scale: rawScale, snapped: false };
+}
+
+/**
+ * Jarak bawah kartu panggung (`.stage-card`, absolute di dalam pembungkus kanvas) dalam persen tinggi pembungkus.
+ * Tanpa divisi plugin: null (CSS bawaan, bottom 1%). Dengan plugin: kanvas lebih tinggi dari BASE_H, jadi kartu
+ * diangkat sebesar bagian tambahan itu dan tetap menempel di dasar kantor bawaan, tidak menutupi zona plugin.
+ */
+export function stageCardBottom(canvasH = H) {
+  if (!(canvasH > BASE_H)) return null;
+  return `${(1 + ((canvasH - BASE_H) / canvasH) * 100).toFixed(3)}%`;
 }

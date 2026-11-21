@@ -73,8 +73,7 @@ describe('antrean: satu tugas aktif', () => {
   it('batal lalu kirim tugas baru: slot bebas, folder berbeda, anak lama mati', async () => {
     const a = await boot({ mode: 'hang' });
     const first = await post(a, 'Tugas pertama');
-    expect(await waitFile(a.logFile)).toBe(true);
-    const { pid } = a.fakeLog();
+    const { pid } = await a.waitFakeLog();
     const t0 = Date.now();
     expect((await cancel(a, first.json.task.id)).status).toBe(200);
     const cancelMs = Date.now() - t0;
@@ -99,8 +98,7 @@ describe('antrean: satu tugas aktif', () => {
   it('CLI mengabaikan SIGTERM: tetap mati setelah batal (eskalasi ke SIGKILL / taskkill /F)', async () => {
     const a = await boot({ mode: 'ignore-term' });
     const r = await post(a);
-    expect(await waitFile(a.logFile)).toBe(true);
-    const { pid } = a.fakeLog();
+    const { pid } = await a.waitFakeLog();
     expect((await cancel(a, r.json.task.id)).status).toBe(200);
     expect((await a.waitDone(r.json.task.id)).status).toBe('cancelled');
     await sleep(300);

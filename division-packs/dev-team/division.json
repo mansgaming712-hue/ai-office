@@ -1,0 +1,15 @@
+{
+  "id": "dev-team",
+  "name": {
+    "en": "Dev Team",
+    "id": "Tim Dev"
+  },
+  "color": "#3b7fb6",
+  "desks": 3,
+  "workers": [
+    "dev-team-planner",
+    "dev-team-builder",
+    "dev-team-reviewer"
+  ],
+  "description": "Tim pengembangan ringkas: perencana, pelaksana, dan peninjau kode."
+}

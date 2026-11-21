@@ -1,0 +1,14 @@
+{
+  "id": "research-team",
+  "name": {
+    "en": "Research Team",
+    "id": "Tim Riset"
+  },
+  "color": "#2f8f7a",
+  "desks": 2,
+  "workers": [
+    "research-team-collector",
+    "research-team-synthesizer"
+  ],
+  "description": "Tim riset dua tahap: pengumpul sumber dan penyintesis temuan."
+}

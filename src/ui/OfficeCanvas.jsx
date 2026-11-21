@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { getState, subscribe } from '../divisions.js';
 import { t, useLang } from '../i18n.js';
 import { frameDelta } from '../motion.js';
 import { COMPACT_QUERY, FRAME_PAD, FRAME_PAD_COMPACT, fitCanvas } from '../office/fit.js';
-import { H, W } from '../office/layout.js';
+import { BASE_H, H, W } from '../office/layout.js';
 import { createRenderer } from '../office/render.js';
 
 const RAIN_KEY = 'ai-office-rain';
@@ -38,6 +39,10 @@ export default function OfficeCanvas({
   const themeRef = useRef(theme);
   themeRef.current = theme;
   const [rain, setRain] = useState(readRain);
+  // Roster plugin berubah → tinggi kanvas berubah: render ulang (rasio) dan hitung ulang ukuran.
+  const rosterVersion = useSyncExternalStore(subscribe, () => getState().version, () => 0);
+  const fitRef = useRef(null);
+  const tall = H > BASE_H;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -52,9 +57,10 @@ export default function OfficeCanvas({
       const pad = compact ? FRAME_PAD_COMPACT : FRAME_PAD;
       const dpr = window.devicePixelRatio || 1;
       // Satu kolom: tinggi mengikuti lebar (tidak membatasi). Dua kolom: muat di tinggi yang tersedia.
+      // Kanvas lebih tinggi dari bawaan (divisi plugin): lebar penuh, panggung boleh digulir.
       const { cssW, cssH } = fitCanvas({
         availW: rect.width - pad,
-        availH: compact ? Infinity : rect.height - pad,
+        availH: compact || H > BASE_H ? Infinity : rect.height - pad,
         dpr,
       });
       canvas.style.width = `${cssW}px`;
@@ -62,6 +68,7 @@ export default function OfficeCanvas({
       canvas.width = Math.round(cssW * dpr);
       canvas.height = Math.round(cssH * dpr);
     };
+    fitRef.current = fit;
     const ro = new ResizeObserver(fit);
     ro.observe(wrap);
     window.addEventListener('resize', fit);
@@ -100,8 +107,13 @@ export default function OfficeCanvas({
       window.removeEventListener('resize', fit);
       ro.disconnect();
       rendererRef.current = null;
+      fitRef.current = null;
     };
   }, [office]);
+
+  useEffect(() => {
+    fitRef.current?.();
+  }, [rosterVersion]);
 
   useEffect(() => {
     rendererRef.current?.setTheme(theme);
@@ -134,7 +146,7 @@ export default function OfficeCanvas({
   };
 
   return (
-    <div className="office-wrap" ref={wrapRef} style={{ '--office-ratio': `${W} / ${H}` }}>
+    <div className={`office-wrap${tall ? ' is-tall' : ''}`} ref={wrapRef} style={{ '--office-ratio': `${W} / ${H}` }}>
       <div className="office-frame">
         <canvas
           ref={canvasRef}
