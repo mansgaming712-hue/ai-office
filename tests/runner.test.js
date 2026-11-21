@@ -1,6 +1,6 @@
 // Runner (server/runner.js + server/tasks.js) dengan CLI TIRUAN (tests/fixtures/fake-claude.mjs).
 // `claude` sungguhan tidak dipakai dan tidak terpasang di mesin ini: tidak ada run nyata yang diverifikasi di sini.
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
@@ -114,7 +114,8 @@ describe('argumen CLI: konstanta, teks tugas lewat stdin', () => {
     expect(log.argv.join(' ')).not.toContain('calc');
     expect(log.argv).toEqual(buildArgs({}));
     expect(log.stdin).toContain(text);
-    expect(log.cwd.toLowerCase()).toBe(join(a.outputDir, r.json.task.id).toLowerCase());
+    // macOS: tmpdir() /var adalah symlink ke /private/var, dan process.cwd() anak mengembalikan realpath.
+    expect(realpathSync(log.cwd).toLowerCase()).toBe(realpathSync(join(a.outputDir, r.json.task.id)).toLowerCase());
   });
 
   it('env anak: AI_OFFICE_URL = server ini, tanpa AI_OFFICE_RUNNER*, env pengguna diwariskan', async () => {
