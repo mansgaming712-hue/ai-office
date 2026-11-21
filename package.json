@@ -22,6 +22,8 @@
     "prestart": "npm run build",
     "start": "node server/index.js",
     "serve": "node server/index.js",
+    "setup": "node scripts/setup.mjs",
+    "open": "node scripts/open.mjs",
     "pretest": "node scripts/check-toolchain-node.mjs test",
     "test": "vitest run",
     "test:watch": "vitest",
