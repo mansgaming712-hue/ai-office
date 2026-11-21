@@ -4,6 +4,7 @@
 // ulang hanya saat tema berganti. Setiap frame hanya menggambar bagian yang bergerak.
 // Warna lingkungan mengikuti tema (palette.js); warna divisi dan status sama di kedua tema.
 import { GLYPHS, GLYPH_SIZE, STATUS_INFO, uiStatusOf } from '../agentStatus.js';
+import { getState } from '../divisions.js';
 import { divisionName, getLang, t } from '../i18n.js';
 import { easeOutBack } from '../motion.js';
 import { characterName, deskLabel, lookFor, shirtOf, SKINS } from './characters.js';
@@ -419,6 +420,7 @@ export function createRenderer(canvas, { theme = 'dark' } = {}) {
   let themeName = theme;
   let prevBg = null; // latar tema sebelumnya, untuk transisi halus saat tema berganti
   let drawn = false;
+  let rosterVersion = getState().version;
   let fade = 0; // 1 → 0
   let fadeFrom = null;
 
@@ -518,7 +520,24 @@ export function createRenderer(canvas, { theme = 'dark' } = {}) {
     for (const env of office.envelopes) drawEnvelope(pctx, env);
   }
 
+  /** Roster plugin berubah: ukuran kanvas piksel dan cache latar di-reset, lalu latar digambar ulang. */
+  function syncRoster() {
+    const v = getState().version;
+    if (v === rosterVersion && pix.height === H) return;
+    rosterVersion = v;
+    pix.width = W;
+    pix.height = H;
+    bg.width = W;
+    bg.height = H;
+    prevBg = null;
+    fade = 0;
+    fadeFrom = null;
+    drawBackground(bg.getContext('2d'), P);
+    labelKey = '';
+  }
+
   function draw(office, now = Date.now()) {
+    syncRoster();
     if (fade > 0) {
       fadeFrom ??= office.time;
       fade = Math.max(0, 1 - (office.time - fadeFrom) / 0.35);
@@ -534,7 +553,7 @@ export function createRenderer(canvas, { theme = 'dark' } = {}) {
     ctx.drawImage(pix, 0, 0, cw, ch);
     const k = cw / W;
     ctx.setTransform(k, 0, 0, k, 0, 0);
-    const key = `${getLang()}|${themeName}|${cw}x${ch}|${office.inbox}|${[...office.workers.values()].map((w) => w.name + w.status[0]).join(',')}`;
+    const key = `${getLang()}|${themeName}|${cw}x${ch}|${rosterVersion}|${office.inbox}|${[...office.workers.values()].map((w) => w.name + w.status[0]).join(',')}`;
     if (key !== labelKey) {
       labels.width = cw;
       labels.height = ch;

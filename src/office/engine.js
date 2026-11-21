@@ -1,6 +1,7 @@
 // Mesin animasi AI Office: logika murni tanpa DOM, sehingga bisa dites di Node.
 // Event (lihat shared/events.js) diterjemahkan menjadi gerakan manajer, status worker, bubble, dan amplop.
-import { AGENT_NAMES, CEO_ID, MANAGER_ID } from '../../shared/roster.js';
+import { CEO_ID, MANAGER_ID } from '../../shared/roster.js';
+import { agentNames } from '../divisions.js';
 import {
   CELL, DOOR, H, MANAGER_SPOT, PANTRY, W, obstacles, otherSeat, rosterSeats,
 } from './layout.js';
@@ -59,11 +60,11 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 export class Office {
   constructor() {
-    this.seats = rosterSeats();
     this.reset();
   }
 
   reset() {
+    this.seats = rosterSeats();
     this.time = 0;
     this.rng = makeRng(20241121);
     this.pantryTimer = this.#range(TUNING.pantryFirst);
@@ -73,7 +74,7 @@ export class Office {
     this.reducedMotion = this.reducedMotion ?? false;
     this.workers = new Map();
     this.otherCount = 0;
-    for (const name of AGENT_NAMES) this.#addWorker(name, this.seats.get(name), false);
+    for (const name of agentNames()) this.#addWorker(name, this.seats.get(name), false);
     const { seat } = MANAGER_SPOT;
     this.manager = {
       id: MANAGER_ID,
@@ -148,6 +149,41 @@ export class Office {
       lastEnvelopeAt: -Infinity,
       project: null,
     });
+  }
+
+  /**
+   * Roster berubah (divisi plugin dimuat/berubah): hitung ulang meja. Worker yang sudah ada dipindah ke meja
+   * barunya (bawaan, plugin, atau tamu), worker plugin baru ditambahkan, worker plugin yang hilang dan idle dibuang.
+   * Tanpa perubahan roster, tidak ada yang berubah.
+   */
+  syncRoster() {
+    this.seats = rosterSeats();
+    for (const [name, w] of [...this.workers]) {
+      if (!this.seats.has(name) && !w.dynamic && w.status === 'idle') this.workers.delete(name);
+    }
+    for (const name of agentNames()) {
+      if (!this.workers.has(name)) this.#addWorker(name, this.seats.get(name), false);
+    }
+    this.otherCount = 0;
+    for (const [name, w] of this.workers) {
+      const known = this.seats.has(name);
+      const st = known ? this.seats.get(name) : otherSeat(this.otherCount++);
+      w.dynamic = !known;
+      w.division = st.division;
+      w.seat = st.seat;
+      w.desk = st.desk;
+      w.front = st.front;
+      w.exit = st.exit;
+      w.hit = st.hit;
+      w.mode = 'seat';
+      w.x = st.seat.x;
+      w.y = st.seat.y;
+      w.path = [];
+      w.speed = 0;
+      w.slot = null;
+      w.stage = '';
+    }
+    this.#rebuildGrid();
   }
 
   #rebuildGrid() {

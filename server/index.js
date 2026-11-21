@@ -27,6 +27,7 @@ import { createAiOfficeServer } from './app.js';
 import { MIN_OPEN_TOKEN_LENGTH, resolveAuthMode } from './auth.js';
 import { hostnameOf } from './net.js';
 import { loadRunnerKey } from './runnerKey.js';
+import { discoverDivisions, divisionsDirFromEnv } from './divisions.js';
 import { broadFileTools } from './runner.js';
 import { resolveToken, tokenFileLabel } from './tokenSource.js';
 import { createUsageTracker, usageOptionsFromEnv } from './usage.js';
@@ -86,6 +87,10 @@ const serverLog = (line) => console.log(`${new Date().toLocaleTimeString(timeLoc
 // Statistik pemakaian (estimasi lokal dari log Claude Code; tidak memanggil API apa pun).
 const usage = createUsageTracker({ ...usageOptionsFromEnv(), log: serverLog });
 
+// Divisi plugin (divisions/*/division.json): hanya dibaca sebagai data saat server mulai; yang tidak valid dilewati.
+const divisions = discoverDivisions({ dir: divisionsDirFromEnv(process.env), log: serverLog });
+if (divisions.divisions.length) console.log(t('start.divisions', { n: divisions.divisions.length }));
+
 // Runner key (mode lokal tanpa token): header X-AI-Office-Key untuk endpoint runner, demo, dan file tugas.
 let runnerKey = null;
 if (!mode.tokenMode) {
@@ -115,6 +120,7 @@ try {
     usage,
     runnerKey,
     runnerEnabled,
+    divisions,
     log: serverLog,
   });
 } catch (e) {

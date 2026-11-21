@@ -7,10 +7,15 @@
 //   baris 1: Divisi Dev (7) | Marketing & Sales (3)
 //   baris 2: Konten (2) | Riset (1) | Divisi 3D (4, klaster 2x2)
 //   baris 3: Tamu / Lainnya (5 meja, selebar kantor)
+//   baris 4+: divisi plugin (dua zona per baris, maks. 3 meja per baris zona), hanya bila ada. Tanpa plugin,
+//             seluruh denah dan H persis seperti di atas.
 import { DIVISIONS, OTHER_DIVISION } from '../../shared/roster.js';
+import { getPluginDivisions, subscribe } from '../divisions.js';
 
 export const W = 480;
-export const H = 456;
+/** Tinggi kanvas logis. `let` + live binding: berubah hanya lewat applyLayout() saat roster plugin berubah. */
+export let H = 456;
+export const BASE_H = 456;
 export const CELL = 8;
 export const WALL_H = 60;
 /** Selisih vertikal antara titik logis karakter (pinggang) dan telapak kaki sprite 16x24. */
@@ -78,6 +83,55 @@ export const ZONES = {
   },
 };
 
+// ------------------------------------------------------------------ zona divisi plugin (dinamis)
+
+export const PLUGIN_LAYOUT = {
+  top: 456, // 6 di bawah zona Tamu (berakhir di y=450)
+  gap: 6,
+  zoneW: 228,
+  colX: [8, 244],
+  cols: 3, // meja per baris di dalam zona
+  seatDx: 72,
+  seatDy: 50,
+  headerH: 28, // jarak zona ke baris meja pertama (sama dengan zona Tamu)
+  footH: 34,
+};
+
+/** Hitung zona plugin secara deterministik (murni). → { zones: {id: {rect, seats}}, height }. */
+export function computePluginLayout(plugins) {
+  const L = PLUGIN_LAYOUT;
+  const zones = {};
+  let y = L.top;
+  for (let i = 0; i < plugins.length; i += 2) {
+    const pair = plugins.slice(i, i + 2);
+    const heights = pair.map((d) => L.headerH + (Math.ceil(d.desks / L.cols) - 1) * L.seatDy + L.footH);
+    const rowH = Math.max(...heights);
+    pair.forEach((d, c) => {
+      const x = L.colX[c];
+      const seats = [];
+      for (let k = 0; k < d.desks; k++) {
+        seats.push([x + 36 + (k % L.cols) * L.seatDx, y + L.headerH + Math.floor(k / L.cols) * L.seatDy]);
+      }
+      zones[d.id] = { rect: { x, y, w: L.zoneW, h: rowH }, seats };
+    });
+    y += rowH + L.gap;
+  }
+  return { zones, height: plugins.length ? y : BASE_H };
+}
+
+let pluginIds = [];
+
+/** Terapkan roster plugin ke ZONES dan H. Dipanggil otomatis saat src/divisions.js berubah. */
+export function applyLayout(plugins = getPluginDivisions()) {
+  for (const id of pluginIds) delete ZONES[id];
+  const { zones, height } = computePluginLayout(plugins);
+  pluginIds = Object.keys(zones);
+  for (const id of pluginIds) ZONES[id] = zones[id];
+  H = height;
+}
+subscribe(() => applyLayout());
+applyLayout();
+
 // Dekorasi yang juga menjadi penghalang jalan.
 export const DECOR = [
   { kind: 'dispenser', ...PANTRY.dispenser },
@@ -101,7 +155,7 @@ export function workstation(sx, sy) {
 /** Kursi untuk tiap agen roster: Map(name → { division, ...workstation }). */
 export function rosterSeats() {
   const seats = new Map();
-  for (const div of DIVISIONS) {
+  for (const div of [...DIVISIONS, ...getPluginDivisions()]) {
     const zone = ZONES[div.id];
     div.agents.forEach((name, i) => {
       const [sx, sy] = zone.seats[i];
@@ -119,7 +173,7 @@ export function otherSeat(index) {
 }
 
 export function zoneList() {
-  return [...DIVISIONS, OTHER_DIVISION].map((d) => ({ division: d, rect: ZONES[d.id].rect }));
+  return [...DIVISIONS, OTHER_DIVISION, ...getPluginDivisions()].map((d) => ({ division: d, rect: ZONES[d.id].rect }));
 }
 
 /** Persegi penghalang untuk pathfinding. `stations` = iterable workstation. */

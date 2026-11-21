@@ -1,0 +1,15 @@
+{
+  "id": "content-team",
+  "name": {
+    "en": "Content Team",
+    "id": "Tim Konten"
+  },
+  "color": "#c0508a",
+  "desks": 3,
+  "workers": [
+    "content-team-ideator",
+    "content-team-writer",
+    "content-team-editor"
+  ],
+  "description": "Tim konten tulisan: pencari ide, penulis, dan penyunting."
+}

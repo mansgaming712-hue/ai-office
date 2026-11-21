@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 import { buildArgs, extraArgs, allowedTools, findClaude, spawnPlan, childEnv, killTreeSync, timeoutFromEnv, createLineParser, DEFAULT_TOOLS } from '../server/runner.js';
 import { slugify } from '../server/outputStore.js';
-import { FAKE_CLAUDE, KEY, eventsOf, startRunnerApp } from './helpers/runnerkit.js';
+import { FAKE_CLAUDE, KEY, eventsOf, startRunnerApp, waitFor } from './helpers/runnerkit.js';
 import { cleanEnv, sleep } from './helpers/testkit.js';
 
 const apps = [];
@@ -305,34 +305,37 @@ describe('gagal, timeout, batal, sibuk', () => {
   });
 
   it('timeout: proses dibunuh, status failed, event blocked menyebut batas waktu', async () => {
-    const a = await boot({ mode: 'hang', task: { timeoutMs: 700 } });
+    // Batas waktu dihitung sejak spawn; start Node bisa lambat saat mesin sibuk, jadi batas dibuat longgar
+    // dan kematian proses ditunggu dengan polling (bukan jeda tetap). Yang diuji tetap sama.
+    const a = await boot({ mode: 'hang', task: { timeoutMs: 4000 } });
     const r = await post(a, 'Tugas menggantung');
-    const done = await a.waitDone(r.json.task.id, { timeoutMs: 15000 });
+    const { pid } = await a.waitFakeLog();
+    expect(alive(pid)).toBe(true);
+    const done = await a.waitDone(r.json.task.id, { timeoutMs: 40000 });
     expect(done.status).toBe('failed');
-    const { pid } = a.fakeLog();
-    await sleep(300);
+    await waitFor(() => !alive(pid), { what: 'proses CLI mati setelah timeout' });
     expect(alive(pid)).toBe(false);
     expect(eventsOf(a, r.json.task.id).at(-1)).toMatchObject({ type: 'blocked' });
-  });
+  }, 60000);
 
   it('batal: pohon proses (termasuk cucu) mati, status cancelled, event blocked', async () => {
     const a = await boot({ mode: 'hang-tree' });
     const r = await post(a, 'Tugas dibatalkan');
     const id = r.json.task.id;
-    for (let i = 0; i < 100 && !existsSync(a.logFile); i++) await sleep(50);
-    const { pid, grandchild } = a.fakeLog();
+    const { pid, grandchild } = await a.waitFakeLog();
+    expect(typeof grandchild).toBe('number');
     expect(alive(pid) && alive(grandchild)).toBe(true);
     const c = await a.api(`/api/tasks/${id}/cancel`, { method: 'POST', body: {} });
     expect(c.status).toBe(200);
     expect(c.json).toEqual({ ok: true });
-    expect((await a.waitDone(id)).status).toBe('cancelled');
-    await sleep(300);
+    expect((await a.waitDone(id, { timeoutMs: 30000 })).status).toBe('cancelled');
+    await waitFor(() => !alive(pid) && !alive(grandchild), { what: 'seluruh pohon proses mati' });
     expect(alive(pid)).toBe(false);
     expect(alive(grandchild)).toBe(false);
     expect(eventsOf(a, id).at(-1)).toMatchObject({ type: 'blocked', from: 'manager', to: 'ceo' });
     // setelah batal slot bebas lagi
     expect((await a.api('/api/runner')).json.active).toBeNull();
-  });
+  }, 60000);
 
   it('batal pada id yang tidak berjalan: 404', async () => {
     const a = await boot();
@@ -363,10 +366,9 @@ describe('gagal, timeout, batal, sibuk', () => {
     const a = await boot({ mode: 'hang-tree' });
     const r = await post(a, 'Tugas saat server berhenti');
     expect(r.status).toBe(202);
-    for (let i = 0; i < 100 && !existsSync(a.logFile); i++) await sleep(50);
-    const { pid, grandchild } = a.fakeLog();
+    const { pid, grandchild } = await a.waitFakeLog();
     await a.app.close();
-    await sleep(300);
+    await waitFor(() => !alive(pid) && !alive(grandchild), { what: 'anak ikut mati saat server berhenti' });
     expect(alive(pid)).toBe(false);
     expect(alive(grandchild)).toBe(false);
     apps.pop(); // sudah ditutup; bersihkan folder saja

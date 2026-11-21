@@ -132,6 +132,8 @@ export function t(key, vars, lang = current) {
 
 /** Nama divisi untuk tampilan: terjemahan `office.zone.<id>`, cadangan nama bawaan dari roster. */
 export function divisionName(division) {
+  const n = division.names; // divisi plugin: nama dua bahasa dari server (teks biasa)
+  if (n && typeof n === 'object') return n[current] || n[DEFAULT_LANG] || division.name;
   const key = `office.zone.${division.id}`;
   return hasKey(key) ? t(key) : division.name;
 }
