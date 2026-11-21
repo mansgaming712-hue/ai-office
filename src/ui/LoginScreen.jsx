@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react';
 import { prepareToken } from '../auth.js';
+import { t, useLang } from '../i18n.js';
+import LangToggle from './LangToggle.jsx';
 import ThemeToggle from './ThemeToggle.jsx';
 import { useTheme } from './useTheme.js';
 
@@ -9,6 +11,7 @@ import { useTheme } from './useTheme.js';
  * ikut ke URL walau form sampai ter-submit secara native.
  */
 export default function LoginScreen({ notice, onLogin }) {
+  useLang();
   const { theme, toggle } = useTheme();
   const [token, setToken] = useState('');
   const [busy, setBusy] = useState(false);
@@ -35,13 +38,13 @@ export default function LoginScreen({ notice, onLogin }) {
     try {
       result = await onLogin(prepared.token);
     } catch {
-      result = { ok: false, error: 'Gagal masuk. Coba lagi.' };
+      result = { ok: false, error: t('ui.login.fail') };
     }
     busyRef.current = false;
     // Berhasil: induk mengganti layar ini dengan kantor, tidak perlu update state.
     if (result?.ok) return;
     setBusy(false);
-    fail(result?.error || 'Gagal masuk. Coba lagi.');
+    fail(result?.error || t('ui.login.fail'));
   };
 
   const isError = message?.kind === 'error';
@@ -50,9 +53,9 @@ export default function LoginScreen({ notice, onLogin }) {
     <main className="auth-screen">
       <form className="auth-card" onSubmit={submit} aria-labelledby="login-title" aria-busy={busy} noValidate>
         <h1 id="login-title">AI&nbsp;Office</h1>
-        <p className="auth-sub">Server ini dilindungi token. Masukkan token akses untuk membuka kantor.</p>
+        <p className="auth-sub">{t('ui.login.sub')}</p>
 
-        <label htmlFor="login-token">Token akses</label>
+        <label htmlFor="login-token">{t('ui.login.tokenLabel')}</label>
         <input
           id="login-token"
           ref={inputRef}
@@ -73,9 +76,10 @@ export default function LoginScreen({ notice, onLogin }) {
         </p>
 
         <button type="submit" className="btn btn-primary auth-submit" disabled={busy}>
-          {busy ? 'Memeriksa…' : 'Masuk'}
+          {busy ? t('ui.login.checking') : t('ui.login.submit')}
         </button>
         <div className="auth-theme">
+          <LangToggle />
           <ThemeToggle theme={theme} onToggle={toggle} />
         </div>
       </form>

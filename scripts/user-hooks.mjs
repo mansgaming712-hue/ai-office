@@ -13,6 +13,7 @@ import {
 import { homedir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { t } from '../shared/i18n.js';
 
 export const PROJECT_DIR = resolve(fileURLToPath(new URL('../', import.meta.url)));
 export const HOOK_TIMEOUT_S = 3;
@@ -28,10 +29,10 @@ export function userSettingsPath(env = process.env) {
 /** Alasan menolak memasang dari folder proyek ini, atau null. */
 export function projectProblem(projectDir = PROJECT_DIR) {
   const p = String(projectDir);
-  if (/["\r\n]/.test(p)) return 'Path proyek memuat tanda kutip atau baris baru; hook tidak dipasang.';
+  if (/["\r\n]/.test(p)) return t('hooks.pathQuotes');
   // Command dijalankan lewat shell (cmd atau bash): karakter yang bisa diekspansi di dalam tanda kutip
   // ganda ($, backtick, %, !) ditolak supaya path folder tidak bisa menyisipkan perintah.
-  if (/[$`%!]/.test(p)) return 'Path proyek memuat karakter $ ` % atau ! yang bisa diekspansi shell; pindahkan proyek ke folder lain.';
+  if (/[$`%!]/.test(p)) return t('hooks.pathChars');
   return null;
 }
 

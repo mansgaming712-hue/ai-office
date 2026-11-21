@@ -2,21 +2,30 @@
 // format angka, dan pemilihan warna bar. Fungsi murni tanpa DOM supaya bisa dites di Node.
 // Dashboard tidak memanggil model atau API AI apa pun: data hanya dibaca dari server AI Office.
 import { stripControl, truncate } from '../shared/events.js';
+import { intlLocale, getLang, t } from './i18n.js';
 
-export const USAGE_LABEL = 'Estimasi, angka resmi cek /usage';
-export const UNAVAILABLE_TEXT = 'data tidak tersedia';
-export const CONFIG_HINT = 'Isi weeklyTokenLimit di limit-config.json';
-export const WARNING_TEXT = 'Limit hampir habis, hemat mode';
+// Teks menurut bahasa aktif (src/i18n.js), jadi berupa fungsi.
+export const usageLabel = () => t('ui.usage.note');
+export const unavailableText = () => t('ui.usage.unavailable');
+export const configHint = () => t('ui.usage.configHint');
+export const warningText = () => t('ui.usage.warning');
 export const POLL_MS = 60_000;
 export const TOP_AGENTS = 5;
 export const CHART_DAYS = 7;
 
 export const LEVELS = ['green', 'yellow', 'red'];
-export const LEVEL_INFO = {
-  green: { label: 'Aman', color: '#45a85a' },
-  yellow: { label: 'Waspada', color: '#e8b931' },
-  red: { label: 'Kritis', color: '#e04848' },
-};
+const LEVEL_COLORS = { green: '#45a85a', yellow: '#e8b931', red: '#e04848' };
+export const LEVEL_INFO = Object.fromEntries(
+  LEVELS.map((lv) => [
+    lv,
+    {
+      get label() {
+        return t(`ui.usage.level.${lv}`);
+      },
+      color: LEVEL_COLORS[lv],
+    },
+  ]),
+);
 
 const TOKEN_FIELDS = ['input', 'output', 'cacheRead', 'cacheCreation', 'total'];
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -24,39 +33,43 @@ const MAX_LIST = 200; // batas defensif untuk days/perAgent
 
 // ------------------------------------------------------------------ format angka
 
-const nf = (digits) => new Intl.NumberFormat('id-ID', { maximumFractionDigits: digits, minimumFractionDigits: 0 });
-const NF0 = nf(0);
-const NF1 = nf(1);
+// Format angka mengikuti bahasa aktif (id-ID: "1,2 jt"; en-US: "1.2M"); formatter disimpan per bahasa.
+const nfCache = new Map();
+function nf(digits, lang = getLang()) {
+  const k = `${lang}:${digits}`;
+  if (!nfCache.has(k)) nfCache.set(k, new Intl.NumberFormat(intlLocale(lang), { maximumFractionDigits: digits, minimumFractionDigits: 0 }));
+  return nfCache.get(k);
+}
 const UNITS = [
-  [1e3, 'rb'],
-  [1e6, 'jt'],
-  [1e9, 'M'],
+  [1e3, 'k'],
+  [1e6, 'm'],
+  [1e9, 'b'],
 ];
 
-/** Angka token ringkas gaya Indonesia: 845, "12,3 rb", "845 rb", "1,2 jt", "3 M". Nilai rusak → "–". */
+/** Angka token ringkas menurut bahasa aktif. Indonesia: 845, "12,3 rb", "845 rb", "1,2 jt", "3 M". Nilai rusak → "–". */
 export function formatTokens(n) {
   if (typeof n !== 'number' || !Number.isFinite(n) || n < 0) return '–';
-  if (Math.round(n) < 1000) return NF0.format(Math.round(n));
+  if (Math.round(n) < 1000) return nf(0).format(Math.round(n));
   for (let i = 0; i < UNITS.length; i++) {
     const [unit, label] = UNITS[i];
     const v = n / unit;
     const digits = v < 100 ? 1 : 0;
     const rounded = Number(v.toFixed(digits));
     if (rounded >= 1000 && i < UNITS.length - 1) continue; // 999.950 → "1 jt", bukan "1.000 rb"
-    return `${(digits ? NF1 : NF0).format(rounded)} ${label}`;
+    return `${nf(digits ? 1 : 0).format(rounded)}${getLang() === 'id' ? ' ' : ''}${t(`ui.usage.unit.${label}`)}`;
   }
   return '–';
 }
 
 /** Angka penuh dengan pemisah ribuan id-ID: "1.234.567". */
 export function formatFull(n) {
-  return typeof n === 'number' && Number.isFinite(n) && n >= 0 ? NF0.format(Math.round(n)) : '–';
+  return typeof n === 'number' && Number.isFinite(n) && n >= 0 ? nf(0).format(Math.round(n)) : '–';
 }
 
 /** "72%" / "12,5%". */
 export function formatPercent(p) {
   if (typeof p !== 'number' || !Number.isFinite(p) || p < 0) return '–';
-  return `${(p < 10 ? NF1 : NF0).format(Number(p.toFixed(p < 10 ? 1 : 0)))}%`;
+  return `${nf(p < 10 ? 1 : 0).format(Number(p.toFixed(p < 10 ? 1 : 0)))}%`;
 }
 
 // ------------------------------------------------------------------ level warna
@@ -113,7 +126,7 @@ function weeklyView(w) {
   return { used: w.used, limit: configured ? w.limit : null, percent, level, configured };
 }
 
-const unavailable = (reason) => ({ ok: false, reason: cleanText(reason, 120) ?? UNAVAILABLE_TEXT });
+const unavailable = (reason) => ({ ok: false, reason: cleanText(reason, 120) ?? unavailableText() });
 
 /**
  * Validasi objek `usage` (kontrak dev-backend). Tidak pernah melempar.
@@ -183,8 +196,6 @@ export function isLimitWarning(state) {
 
 // ------------------------------------------------------------------ grafik 7 hari
 
-const WEEKDAY = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
-
 /** Batang grafik: tinggi relatif (0–100) terhadap hari terbesar, plus label hari & tanggal. */
 export function chartBars(days) {
   const max = Math.max(0, ...days.map((d) => d.total));
@@ -195,7 +206,7 @@ export function chartBars(days) {
       date: d.date,
       total: d.total,
       height: max > 0 ? (d.total / max) * 100 : 0,
-      weekday: valid ? WEEKDAY[dt.getUTCDay()] : '?',
+      weekday: valid ? t(`ui.weekday.${dt.getUTCDay()}`) : '?',
       short: valid ? `${d.date.slice(8, 10)}/${d.date.slice(5, 7)}` : d.date,
     };
   });

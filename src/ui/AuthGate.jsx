@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useReducer } from 'react';
 import { authReducer, initialAuthState, resolveLogin, shouldReconnect } from '../auth.js';
 import { getSession, postLogin, postLogout } from '../net.js';
+import { t, useLang } from '../i18n.js';
 import App from './App.jsx';
 import LoginScreen from './LoginScreen.jsx';
 import { OfficeSkeleton, PixelSpinner } from './Skeleton.jsx';
@@ -12,6 +13,7 @@ import { useTheme } from './useTheme.js';
  */
 export default function AuthGate() {
   const [state, dispatch] = useReducer(authReducer, initialAuthState);
+  useLang();
   useTheme(); // memastikan tema terpasang di semua layar (login, memuat, kantor)
   const { phase, epoch, authRequired, notice } = state;
 
@@ -55,7 +57,7 @@ export default function AuthGate() {
       <div className="auth-loading">
         <OfficeSkeleton />
         <p role="status">
-          <PixelSpinner /> Memeriksa sesi…
+          <PixelSpinner /> {t('ui.auth.checkingSession')}
         </p>
       </div>
     </main>

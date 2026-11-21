@@ -17,6 +17,7 @@ import { request } from 'node:http';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { t } from '../shared/i18n.js';
 
 export const PROJECT_DIR = path.resolve(fileURLToPath(new URL('../', import.meta.url)));
 export const LAUNCHD_LABEL = 'com.ai-office.server';
@@ -31,19 +32,19 @@ const WIN_SCRIPTS = { install: 'install-autostart.ps1', uninstall: 'uninstall-au
 
 /** Alasan menolak sebuah path (baris baru/karakter kontrol, kosong, bukan absolut), atau null. */
 export function pathProblem(value, label = 'path') {
-  if (typeof value !== 'string' || value === '') return `${label} kosong`;
+  if (typeof value !== 'string' || value === '') return t('autostart.pathEmpty', { label });
   // eslint-disable-next-line no-control-regex
-  if (/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(value)) return `${label} memuat baris baru atau karakter kontrol`;
+  if (/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(value)) return t('autostart.pathControl', { label });
   // Karakter yang tidak sah di XML 1.0 (U+FFFE, U+FFFF, surrogate tanpa pasangan) membuat plist tidak valid.
-  if (/[\ufffe\uffff]/.test(value) || !value.isWellFormed()) return `${label} memuat karakter yang tidak sah`;
-  if (!path.posix.isAbsolute(value) && !path.win32.isAbsolute(value)) return `${label} bukan path absolut`;
+  if (/[\ufffe\uffff]/.test(value) || !value.isWellFormed()) return t('autostart.pathInvalid', { label });
+  if (!path.posix.isAbsolute(value) && !path.win32.isAbsolute(value)) return t('autostart.pathNotAbsolute', { label });
   return null;
 }
 
 function assertPaths(entries) {
   for (const [label, value] of entries) {
     const problem = pathProblem(value, label);
-    if (problem) throw new Error(`${problem}; autostart tidak dipasang.`);
+    if (problem) throw new Error(t('autostart.notInstalled', { problem }));
   }
 }
 
@@ -68,10 +69,10 @@ export function systemdPathValue(s) {
 
 /** Isi LaunchAgent plist (macOS). Melempar Error bila path berbahaya. */
 export function launchdPlist({ label = LAUNCHD_LABEL, nodePath, projectDir, logDir, throttleSeconds = 10 }) {
-  assertPaths([['path node', nodePath], ['path proyek', projectDir]]);
+  assertPaths([[t('autostart.label.node'), nodePath], [t('autostart.label.project'), projectDir]]);
   const server = path.posix.join(String(projectDir).replace(/\\/g, '/'), 'server', 'index.js');
   const logs = logDir ?? `${String(projectDir).replace(/\\/g, '/')}/logs`;
-  assertPaths([['folder log', logs]]);
+  assertPaths([[t('autostart.label.logs'), logs]]);
   const log = `${logs}/server.log`;
   const s = (v) => `<string>${xmlEscape(v)}</string>`;
   return [
@@ -109,10 +110,10 @@ export function launchdPlist({ label = LAUNCHD_LABEL, nodePath, projectDir, logD
 
 /** Isi unit systemd user (Linux). Melempar Error bila path berbahaya. */
 export function systemdUnit({ nodePath, projectDir, restartSeconds = 5, burst = 5, intervalSeconds = 300 }) {
-  assertPaths([['path node', nodePath], ['path proyek', projectDir]]);
+  assertPaths([[t('autostart.label.node'), nodePath], [t('autostart.label.project'), projectDir]]);
   if (/\\$/.test(String(projectDir))) {
     // Baris unit yang berakhiran "\" disambung dengan baris berikutnya, sehingga ExecStart ikut tertelan.
-    throw new Error('path proyek berakhiran backslash; systemd tidak bisa memakainya. Pindahkan proyek ke folder lain; autostart tidak dipasang.');
+    throw new Error(t('autostart.backslashEnd'));
   }
   const server = `${String(projectDir).replace(/\/+$/, '')}/server/index.js`;
   return [
@@ -164,36 +165,32 @@ export function parseArgs(argv) {
     else if (a === '--help' || a === '-h') out.help = true;
     else if (/^--(platform|home|project|node|uid)=/.test(a)) {
       const [, k, v] = /^--(\w+)=([\s\S]*)$/.exec(a);
-      if (v === '') out.error = `Opsi --${k} tidak boleh kosong.`;
-      else if (k === 'uid' && !/^\d{1,10}$/.test(v)) out.error = '--uid harus berupa angka.';
+      if (v === '') out.error = t('autostart.optEmpty', { k });
+      else if (k === 'uid' && !/^\d{1,10}$/.test(v)) out.error = t('autostart.uidNumber');
       // eslint-disable-next-line no-control-regex
-      else if (/[\u0000-\u001f\u007f]/.test(v)) out.error = `Opsi --${k} memuat baris baru atau karakter kontrol.`;
+      else if (/[\u0000-\u001f\u007f]/.test(v)) out.error = t('autostart.optControl', { k });
       else out.overrides[k] = v;
-    } else if (a.startsWith('-')) out.error = `Opsi tidak dikenal: ${a}`;
+    } else if (a.startsWith('-')) out.error = t('autostart.optUnknown', { a });
     else if (out.command === null) out.command = a;
-    else out.error = `Argumen berlebih: ${a}`;
+    else out.error = t('autostart.argExtra', { a });
   }
   if (!out.error && !out.help) {
-    if (out.command === null) out.error = 'Perintah belum diberikan.';
-    else if (!COMMANDS.includes(out.command)) out.error = `Perintah tidak dikenal: ${out.command}`;
+    if (out.command === null) out.error = t('autostart.cmdMissing');
+    else if (!COMMANDS.includes(out.command)) out.error = t('autostart.cmdUnknown', { command: out.command });
   }
   if (!out.error && Object.keys(out.overrides).length && !out.dryRun) {
-    out.error = `Opsi --${Object.keys(out.overrides)[0]} hanya boleh bersama --dry-run (khusus uji).`;
+    out.error = t('autostart.optDryOnly', { k: Object.keys(out.overrides)[0] });
   }
   if (!out.error && out.overrides.platform && !PLATFORMS.includes(out.overrides.platform)) {
-    out.error = `--platform harus salah satu dari: ${PLATFORMS.join(', ')}`;
+    out.error = t('autostart.platformOneOf', { list: PLATFORMS.join(', ') });
   }
   return out;
 }
 
-export const USAGE = [
-  'Pemakaian: node scripts/autostart.mjs <install|uninstall|stop|status> [--dry-run]',
-  '  install    pasang autostart dan nyalakan server',
-  '  uninstall  lepas autostart (server dihentikan)',
-  '  stop       hentikan server sekarang (autostart tetap terpasang)',
-  '  status     tampilkan keadaan autostart dan server (hanya membaca)',
-  '  --dry-run  cetak apa yang akan ditulis/dijalankan, tanpa mengubah apa pun',
-].join('\n');
+/** Teks bantuan menurut bahasa pengguna (dibaca saat dipakai, bukan saat impor). */
+export const usageText = () => t('autostart.usage');
+/** Bahasa Indonesia, untuk pemakai lama yang mengimpor USAGE. */
+export const USAGE = t('autostart.usage', {}, 'id');
 
 // ---------------------------------------------------------------------------------------------
 // Lapisan I/O (bisa diganti saat uji)
@@ -238,11 +235,11 @@ function realIo() {
 function dryIo(log) {
   return {
     exists: () => false,
-    mkdir: (p) => log(`[dry-run] akan membuat folder: ${p}`),
-    write: (p, content) => log(`[dry-run] akan menulis file: ${p}\n----- awal isi -----\n${content.replace(/\n$/, '')}\n----- akhir isi -----`),
-    remove: (p) => log(`[dry-run] akan menghapus file: ${p}`),
-    run: (cmd, args) => { log(`[dry-run] akan menjalankan: ${[cmd, ...args].join(' ')}`); return { status: 0, stdout: '', stderr: '' }; },
-    runInherit: (cmd, args) => { log(`[dry-run] akan menjalankan: ${[cmd, ...args].join(' ')}`); return { status: 0 }; },
+    mkdir: (p) => log(t('autostart.dryMkdir', { p })),
+    write: (p, content) => log(t('autostart.dryWrite', { p, content: content.replace(/\n$/, '') })),
+    remove: (p) => log(t('autostart.dryRemove', { p })),
+    run: (cmd, args) => { log(t('autostart.dryRun', { cmd: [cmd, ...args].join(' ') })); return { status: 0, stdout: '', stderr: '' }; },
+    runInherit: (cmd, args) => { log(t('autostart.dryRun', { cmd: [cmd, ...args].join(' ') })); return { status: 0 }; },
     health: async () => false,
   };
 }
@@ -256,51 +253,51 @@ function windowsCommand(ctx, command) {
   const args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script];
   const r = ctx.io.runInherit('powershell', args);
   if (r.error) {
-    ctx.err('GAGAL: powershell tidak bisa dijalankan. Autostart Windows membutuhkan Windows PowerShell.');
+    ctx.err(t('autostart.psMissing'));
     return 1;
   }
   return r.status;
 }
 
 function macInstall(ctx) {
-  const t = ctx.targets;
-  const plist = launchdPlist({ nodePath: ctx.nodePath, projectDir: ctx.projectDir, logDir: t.logDir });
+  const tg = ctx.targets;
+  const plist = launchdPlist({ nodePath: ctx.nodePath, projectDir: ctx.projectDir, logDir: tg.logDir });
   const domain = `gui/${ctx.uid}`;
-  ctx.log('Memasang autostart AI Office (macOS LaunchAgent)...');
-  ctx.log(`  node   : ${ctx.nodePath}`);
-  ctx.log(`  proyek : ${ctx.projectDir}`);
-  ctx.log(`  plist  : ${t.file}`);
+  ctx.log(t('autostart.mac.installing'));
+  ctx.log(t('autostart.line.node', { v: ctx.nodePath }));
+  ctx.log(t('autostart.line.project', { v: ctx.projectDir }));
+  ctx.log(t('autostart.line.plist', { v: tg.file }));
   if (!ctx.io.exists(path.posix.join(ctx.projectDir, 'dist', 'index.html')) && !ctx.dryRun) {
-    ctx.log('  Peringatan: dist/ belum ada. Jalankan "npm run build" supaya halaman kantor tampil.');
+    ctx.log(t('autostart.noDist'));
   }
-  ctx.io.mkdir(path.posix.dirname(t.file));
-  ctx.io.mkdir(t.logDir);
+  ctx.io.mkdir(path.posix.dirname(tg.file));
+  ctx.io.mkdir(tg.logDir);
   // Lepas dulu bila sudah termuat (aman dijalankan berulang); kegagalan diabaikan.
   ctx.io.run('launchctl', ['bootout', `${domain}/${LAUNCHD_LABEL}`]);
-  ctx.io.write(t.file, plist);
-  let r = ctx.io.run('launchctl', ['bootstrap', domain, t.file]);
+  ctx.io.write(tg.file, plist);
+  let r = ctx.io.run('launchctl', ['bootstrap', domain, tg.file]);
   if (r.status !== 0) {
-    ctx.log('  launchctl bootstrap gagal, mencoba "launchctl load -w" (macOS lama)...');
-    r = ctx.io.run('launchctl', ['load', '-w', t.file]);
+    ctx.log(t('autostart.mac.bootstrapFailed'));
+    r = ctx.io.run('launchctl', ['load', '-w', tg.file]);
   }
   if (r.status !== 0) {
-    ctx.err(`GAGAL: LaunchAgent tidak bisa dimuat (${String(r.stderr ?? '').trim() || `kode ${r.status}`}).`);
-    ctx.err(`File plist sudah ditulis di ${t.file}. Coba manual: launchctl bootstrap ${domain} "${t.file}"`);
+    ctx.err(t('autostart.mac.loadFailed', { reason: String(r.stderr ?? '').trim() || t('autostart.code', { code: r.status }) }));
+    ctx.err(t('autostart.mac.plistWritten', { file: tg.file, domain }));
     return 1;
   }
-  ctx.log('Selesai. Server berjalan di http://localhost:3000 dan otomatis menyala saat login.');
-  ctx.log(`Log: ${t.logDir}/server.log`);
+  ctx.log(t('autostart.done'));
+  ctx.log(t('autostart.mac.log', { dir: tg.logDir }));
   return 0;
 }
 
 function macUninstall(ctx) {
-  const t = ctx.targets;
+  const tg = ctx.targets;
   const domain = `gui/${ctx.uid}`;
-  ctx.log('Melepas autostart AI Office (macOS)...');
+  ctx.log(t('autostart.mac.uninstalling'));
   const r = ctx.io.run('launchctl', ['bootout', `${domain}/${LAUNCHD_LABEL}`]);
-  if (r.status !== 0 && ctx.io.exists(t.file)) ctx.io.run('launchctl', ['unload', '-w', t.file]);
-  ctx.io.remove(t.file);
-  ctx.log('Selesai. Autostart dilepas dan server dihentikan.');
+  if (r.status !== 0 && ctx.io.exists(tg.file)) ctx.io.run('launchctl', ['unload', '-w', tg.file]);
+  ctx.io.remove(tg.file);
+  ctx.log(t('autostart.uninstalled'));
   return 0;
 }
 
@@ -308,19 +305,19 @@ function macStop(ctx) {
   const domain = `gui/${ctx.uid}`;
   const r = ctx.io.run('launchctl', ['bootout', `${domain}/${LAUNCHD_LABEL}`]);
   if (r.status !== 0) {
-    ctx.log('Tidak ada LaunchAgent AI Office yang sedang termuat (mungkin sudah berhenti).');
+    ctx.log(t('autostart.mac.notLoaded'));
     return 0;
   }
-  ctx.log('Server dihentikan. Autostart tetap terpasang dan aktif lagi saat login berikutnya (atau jalankan: npm run autostart:install).');
+  ctx.log(t('autostart.mac.stopped'));
   return 0;
 }
 
 async function macStatus(ctx) {
-  const t = ctx.targets;
-  ctx.log(`Platform  : macOS (LaunchAgent ${LAUNCHD_LABEL})`);
-  ctx.log(`Plist     : ${ctx.io.exists(t.file) ? 'ada' : 'tidak ada'} (${t.file})`);
+  const tg = ctx.targets;
+  ctx.log(t('autostart.mac.platform', { label: LAUNCHD_LABEL }));
+  ctx.log(t('autostart.status.plist', { state: t(ctx.io.exists(tg.file) ? 'autostart.exists' : 'autostart.notExists'), file: tg.file }));
   const r = ctx.io.run('launchctl', ['print', `gui/${ctx.uid}/${LAUNCHD_LABEL}`]);
-  ctx.log(`Termuat   : ${r.status === 0 ? 'ya' : 'tidak'}`);
+  ctx.log(t('autostart.status.loaded', { v: t(r.status === 0 ? 'autostart.yes' : 'autostart.no') }));
   return healthLine(ctx);
 }
 
@@ -329,99 +326,99 @@ function systemctlUser(ctx, ...args) {
 }
 
 function systemdUnavailable(ctx, reason) {
-  const t = ctx.targets;
-  ctx.err(`GAGAL: systemd user tidak tersedia (${reason}). Tidak ada yang diubah.`);
-  ctx.err('Petunjuk manual:');
-  ctx.err(`  1. Jalankan dari terminal: cd "${ctx.projectDir}" && node server/index.js`);
-  ctx.err(`  2. Atau, bila systemd ada tetapi sesi user-nya tidak aktif, login lewat sesi biasa (bukan sudo/su) lalu ulangi.`);
-  ctx.err(`  3. Atau salin unit buatan "node scripts/autostart.mjs install --dry-run" ke ${t.file}, lalu:`);
-  ctx.err('       systemctl --user daemon-reload && systemctl --user enable --now ai-office.service');
-  ctx.err('  Agar server tetap jalan tanpa login (server tanpa layar): sudo loginctl enable-linger "$USER" (opsional, tidak dijalankan otomatis).');
+  const tg = ctx.targets;
+  ctx.err(t('autostart.systemd.unavailable', { reason }));
+  ctx.err(t('autostart.systemd.manualHeader'));
+  ctx.err(t('autostart.systemd.manual1', { dir: ctx.projectDir }));
+  ctx.err(t('autostart.systemd.manual2'));
+  ctx.err(t('autostart.systemd.manual3', { file: tg.file }));
+  ctx.err(t('autostart.systemd.manual3b'));
+  ctx.err(t('autostart.systemd.linger'));
   return 1;
 }
 
 function linuxInstall(ctx) {
-  const t = ctx.targets;
+  const tg = ctx.targets;
   const unit = systemdUnit({ nodePath: ctx.nodePath, projectDir: ctx.projectDir });
-  ctx.log('Memasang autostart AI Office (Linux, systemd user)...');
-  ctx.log(`  node   : ${ctx.nodePath}`);
-  ctx.log(`  proyek : ${ctx.projectDir}`);
-  ctx.log(`  unit   : ${t.file}`);
+  ctx.log(t('autostart.linux.installing'));
+  ctx.log(t('autostart.line.node', { v: ctx.nodePath }));
+  ctx.log(t('autostart.line.project', { v: ctx.projectDir }));
+  ctx.log(t('autostart.line.unit', { v: tg.file }));
   if (!ctx.dryRun) {
     const probe = systemctlUser(ctx, 'show-environment');
     if (probe.status !== 0) {
-      return systemdUnavailable(ctx, probe.error ? 'perintah systemctl tidak ditemukan' : 'systemctl --user tidak bisa terhubung ke sesi user');
+      return systemdUnavailable(ctx, t(probe.error ? 'autostart.systemd.reasonMissing' : 'autostart.systemd.reasonNoSession'));
     }
   }
   if (!ctx.io.exists(path.posix.join(ctx.projectDir, 'dist', 'index.html')) && !ctx.dryRun) {
-    ctx.log('  Peringatan: dist/ belum ada. Jalankan "npm run build" supaya halaman kantor tampil.');
+    ctx.log(t('autostart.noDist'));
   }
-  ctx.io.mkdir(path.posix.dirname(t.file));
-  ctx.io.mkdir(t.logDir);
-  ctx.io.write(t.file, unit);
+  ctx.io.mkdir(path.posix.dirname(tg.file));
+  ctx.io.mkdir(tg.logDir);
+  ctx.io.write(tg.file, unit);
   let r = systemctlUser(ctx, 'daemon-reload');
   if (r.status === 0) r = systemctlUser(ctx, 'enable', '--now', SYSTEMD_UNIT);
   if (r.status !== 0) {
-    ctx.err(`GAGAL: systemctl --user gagal (${String(r.stderr ?? '').trim() || `kode ${r.status}`}). Unit sudah ditulis di ${t.file}.`);
-    ctx.err(`Lihat penyebabnya: journalctl --user -u ${SYSTEMD_UNIT} -e`);
+    ctx.err(t('autostart.linux.failed', { reason: String(r.stderr ?? '').trim() || t('autostart.code', { code: r.status }), file: tg.file }));
+    ctx.err(t('autostart.linux.why', { unit: SYSTEMD_UNIT }));
     return 1;
   }
-  ctx.log('Selesai. Server berjalan di http://localhost:3000 dan otomatis menyala saat login.');
-  ctx.log(`Log: journalctl --user -u ${SYSTEMD_UNIT} -f`);
-  ctx.log('Catatan: agar tetap jalan saat belum login (mis. server tanpa layar), jalankan sendiri: sudo loginctl enable-linger "$USER"');
+  ctx.log(t('autostart.done'));
+  ctx.log(t('autostart.linux.log', { unit: SYSTEMD_UNIT }));
+  ctx.log(t('autostart.linux.linger'));
   return 0;
 }
 
 function linuxUninstall(ctx) {
-  const t = ctx.targets;
-  ctx.log('Melepas autostart AI Office (Linux, systemd user)...');
+  const tg = ctx.targets;
+  ctx.log(t('autostart.linux.uninstalling'));
   const probe = ctx.dryRun ? { status: 0 } : systemctlUser(ctx, 'show-environment');
   if (probe.status === 0) systemctlUser(ctx, 'disable', '--now', SYSTEMD_UNIT);
-  else ctx.log('  systemctl --user tidak tersedia; hanya file unit yang dihapus.');
-  ctx.io.remove(t.file);
+  else ctx.log(t('autostart.linux.noSystemctl'));
+  ctx.io.remove(tg.file);
   if (probe.status === 0) systemctlUser(ctx, 'daemon-reload');
-  ctx.log('Selesai. Autostart dilepas dan server dihentikan.');
+  ctx.log(t('autostart.uninstalled'));
   return 0;
 }
 
 function linuxStop(ctx) {
   const probe = ctx.dryRun ? { status: 0 } : systemctlUser(ctx, 'show-environment');
-  if (probe.status !== 0) return systemdUnavailable(ctx, 'systemctl --user tidak bisa dipakai');
+  if (probe.status !== 0) return systemdUnavailable(ctx, t('autostart.systemd.reasonUnusable'));
   const r = systemctlUser(ctx, 'stop', SYSTEMD_UNIT);
   if (r.status !== 0) {
-    ctx.log('Tidak ada layanan AI Office yang sedang berjalan (mungkin sudah berhenti).');
+    ctx.log(t('autostart.linux.notRunning'));
     return 0;
   }
-  ctx.log('Server dihentikan. Autostart tetap terpasang dan aktif lagi saat login berikutnya.');
+  ctx.log(t('autostart.linux.stopped'));
   return 0;
 }
 
 async function linuxStatus(ctx) {
-  const t = ctx.targets;
-  ctx.log(`Platform  : Linux (systemd user, ${SYSTEMD_UNIT})`);
-  ctx.log(`Unit      : ${ctx.io.exists(t.file) ? 'ada' : 'tidak ada'} (${t.file})`);
+  const tg = ctx.targets;
+  ctx.log(t('autostart.linux.platform', { unit: SYSTEMD_UNIT }));
+  ctx.log(t('autostart.status.unit', { state: t(ctx.io.exists(tg.file) ? 'autostart.exists' : 'autostart.notExists'), file: tg.file }));
   const probe = systemctlUser(ctx, 'show-environment');
   if (probe.status !== 0) {
-    ctx.log('systemd user: tidak tersedia di sesi ini');
+    ctx.log(t('autostart.linux.noSession'));
   } else {
     const active = systemctlUser(ctx, 'is-active', SYSTEMD_UNIT);
     const enabled = systemctlUser(ctx, 'is-enabled', SYSTEMD_UNIT);
-    ctx.log(`Aktif     : ${String(active.stdout).trim() || 'tidak diketahui'}`);
-    ctx.log(`Autostart : ${String(enabled.stdout).trim() || 'tidak diketahui'}`);
+    ctx.log(t('autostart.status.active', { v: String(active.stdout).trim() || t('autostart.unknown') }));
+    ctx.log(t('autostart.status.enabled', { v: String(enabled.stdout).trim() || t('autostart.unknown') }));
   }
   return healthLine(ctx);
 }
 
 async function windowsStatus(ctx) {
-  const t = ctx.targets;
-  ctx.log('Platform  : Windows (shortcut folder Startup)');
-  ctx.log(`Shortcut  : ${ctx.io.exists(t.file) ? 'ada' : 'tidak ada'} (${t.file})`);
+  const tg = ctx.targets;
+  ctx.log(t('autostart.win.platform'));
+  ctx.log(t('autostart.status.shortcut', { state: t(ctx.io.exists(tg.file) ? 'autostart.exists' : 'autostart.notExists'), file: tg.file }));
   return healthLine(ctx);
 }
 
 async function healthLine(ctx) {
   const ok = await ctx.io.health(ctx.port);
-  ctx.log(`Server    : ${ok ? 'menjawab' : 'tidak menjawab'} di http://127.0.0.1:${ctx.port}/api/health`);
+  ctx.log(t('autostart.status.server', { v: t(ok ? 'autostart.answers' : 'autostart.noAnswer'), url: `http://127.0.0.1:${ctx.port}/api/health` }));
   return 0;
 }
 
@@ -442,11 +439,11 @@ export async function runAutostart(command, opts = {}) {
   const log = opts.log ?? ((m) => console.log(m));
   const err = opts.err ?? ((m) => console.error(m));
   if (!impl) {
-    err(`Platform ${platform} belum didukung untuk autostart. Jalankan manual: node server/index.js`);
+    err(t('autostart.platformUnsupported', { platform }));
     return 1;
   }
   if (!COMMANDS.includes(command)) {
-    err(`Perintah tidak dikenal: ${command}`);
+    err(t('autostart.cmdUnknown', { command }));
     return 2;
   }
   const home = opts.home ?? homedir();
@@ -463,29 +460,29 @@ export async function runAutostart(command, opts = {}) {
   };
   if (platform !== 'win32' && command !== 'status' && command !== 'stop') {
     const problem = pathProblem(nodePath, 'path node') ?? pathProblem(projectDir, 'path proyek');
-    if (problem) { err(`GAGAL: ${problem}; autostart tidak dipasang.`); return 1; }
+    if (problem) { err(t('autostart.failNotInstalled', { problem })); return 1; }
   }
-  if (dryRun) log(`[dry-run] platform: ${platform}, perintah: ${command}. Tidak ada yang diubah.`);
+  if (dryRun) log(t('autostart.dryHeader', { platform, command }));
   if (dryRun && command === 'status') {
     // Status hanya membaca; pada dry-run cukup tampilkan apa yang akan diperiksa.
-    log(`[dry-run] akan memeriksa keberadaan: ${ctx.targets.file}`);
-    if (platform === 'darwin') log(`[dry-run] akan menjalankan: launchctl print gui/${ctx.uid}/${LAUNCHD_LABEL}`);
-    if (platform === 'linux') log(`[dry-run] akan menjalankan: systemctl --user is-active ${SYSTEMD_UNIT} dan is-enabled ${SYSTEMD_UNIT}`);
-    log(`[dry-run] akan memeriksa: GET http://127.0.0.1:${ctx.port}/api/health`);
+    log(t('autostart.dryCheckFile', { file: ctx.targets.file }));
+    if (platform === 'darwin') log(t('autostart.dryRun', { cmd: `launchctl print gui/${ctx.uid}/${LAUNCHD_LABEL}` }));
+    if (platform === 'linux') log(t('autostart.dryRunBoth', { unit: SYSTEMD_UNIT }));
+    log(t('autostart.dryHealth', { url: `http://127.0.0.1:${ctx.port}/api/health` }));
     return 0;
   }
   try {
     return await impl[command](ctx);
   } catch (e) {
-    err(`GAGAL: ${e.message}`);
+    err(t('autostart.fail', { msg: e.message }));
     return 1;
   }
 }
 
 export async function main(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
-  if (args.help) { console.log(USAGE); return 0; }
-  if (args.error) { console.error(`${args.error}\n${USAGE}`); return 2; }
+  if (args.help) { console.log(usageText()); return 0; }
+  if (args.error) { console.error(`${args.error}\n${usageText()}`); return 2; }
   const o = args.overrides;
   return runAutostart(args.command, {
     dryRun: args.dryRun,

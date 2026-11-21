@@ -6,6 +6,7 @@
 // Merge (tidak menimpa), idempoten, backup settings.json.bak-YYYYMMDD-HHMMSS sebelum menulis, tulis
 // atomik. JSON rusak = tidak menulis apa pun, keluar dengan kode 1. Lihat scripts/user-hooks.mjs.
 import '../server/requireNode.js'; // paling awal: cek versi Node (minimal 22.12)
+import { t } from '../shared/i18n.js';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import {
@@ -15,7 +16,7 @@ import {
 
 const target = userSettingsPath();
 const fail = (msg) => {
-  console.error(`Gagal: ${msg}`);
+  console.error(t('hooks.fail', { msg }));
   process.exit(1);
 };
 
@@ -26,14 +27,14 @@ let current;
 try {
   current = readSettings(target);
 } catch (e) {
-  if (e instanceof SettingsError) fail(`${target} ${e.message}. Tidak ada yang ditulis; perbaiki file itu dulu.`);
+  if (e instanceof SettingsError) fail(t('hooks.badSettings', { target, reason: e.message }));
   throw e;
 }
 
 const command = hookCommand();
 const { settings, changed } = installAiOfficeHooks(current.settings, { command });
 if (!changed) {
-  console.log(`Hook AI Office sudah terpasang di ${target}. Tidak ada perubahan.`);
+  console.log(t('hooks.already', { target }));
   process.exit(0);
 }
 
@@ -42,11 +43,11 @@ try {
   if (current.text !== null) backup = backupFile(target);
   else mkdirSync(dirname(target), { recursive: true });
   writeJsonAtomicSync(target, settings);
-  console.log(`Hook AI Office dipasang di ${target}.`);
-  console.log(backup ? `Backup: ${backup}` : 'File belum ada sebelumnya, jadi tidak ada backup.');
-  console.log(`Command: ${command}`);
-  console.log('Event: SubagentStart, SubagentStop, PreToolUse (Agent|Task + tool lain async), PostToolUse (Agent|Task); timeout 3 detik.');
-  console.log('Berlaku untuk sesi Claude Code yang dimulai sesudah ini.');
+  console.log(t('hooks.installed', { target }));
+  console.log(backup ? t('hooks.backup', { backup }) : t('hooks.noBackup'));
+  console.log(t('hooks.command', { command }));
+  console.log(t('hooks.events'));
+  console.log(t('hooks.takesEffect'));
 } catch (e) {
-  fail(`tidak bisa menulis ${target} (${e.code ?? e.message}).`);
+  fail(t('hooks.writeFail', { target, code: e.code ?? e.message }));
 }

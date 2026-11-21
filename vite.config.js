@@ -1,5 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 export default defineConfig({
   plugins: [react()],
@@ -18,5 +20,9 @@ export default defineConfig({
     environment: 'node',
     include: ['tests/**/*.test.js'],
     testTimeout: 15000,
+    // Pesan CLI/server berbahasa Indonesia untuk test lama (lihat shared/i18n.js); test bahasa Inggris
+    // mengganti AI_OFFICE_LANG sendiri.
+    // Runner key uji di folder sementara: test tidak pernah menyentuh ~/.ai-office milik pengguna.
+    env: { AI_OFFICE_LANG: 'id', AI_OFFICE_RUNNER_KEY_FILE: join(tmpdir(), 'ai-office-vitest-runner-key') },
   },
 });

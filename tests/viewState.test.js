@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BANNER_TEXT, CONN_LABEL, EMPTY_TEXT, LOADING_TEXT, initialLink, linkReducer, linkView, stageState,
 } from '../src/viewState.js';
-import { CONFIG_HINT, UNAVAILABLE_TEXT, displayUsage, usageState, validateUsage } from '../src/usage.js';
+import { configHint, unavailableText, displayUsage, usageState, validateUsage } from '../src/usage.js';
 
 const apply = (...actions) => actions.reduce(linkReducer, initialLink);
 const status = (s) => ({ type: 'status', status: s });
@@ -126,14 +126,14 @@ describe('panel pemakaian: loading, tidak tersedia, dan limit belum diisi tetap 
   it('data tidak tersedia → state unavailable dengan alasan; bukan crash', () => {
     const s = usageState(validateUsage({ available: false, reason: 'Folder log tidak ditemukan' }));
     expect(s).toEqual({ status: 'unavailable', reason: 'Folder log tidak ditemukan' });
-    expect(usageState(validateUsage(null)).reason).toBe(UNAVAILABLE_TEXT);
+    expect(usageState(validateUsage(null)).reason).toBe(unavailableText());
   });
 
   it('limit belum diisi → data valid, weekly.configured false, tanpa persen/level', () => {
     const r = validateUsage(usage({}));
     expect(r.ok).toBe(true);
     expect(r.usage.weekly).toMatchObject({ configured: false, limit: null, percent: null, level: null });
-    expect(CONFIG_HINT).toMatch(/weeklyTokenLimit/);
+    expect(configHint()).toMatch(/weeklyTokenLimit/);
   });
 
   it('simulasi menimpa tampilan, data server tetap utuh', () => {

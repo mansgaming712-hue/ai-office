@@ -7,6 +7,7 @@
 // Data usage contoh naik bertahap melewati 60% (kuning) lalu 85% (merah + peringatan manajer).
 // Semua data simulasi hanya untuk tampilan: App menyimpannya terpisah dari data server.
 import { normalizeEvent } from '../../shared/events.js';
+import { getLang } from '../i18n.js';
 import { levelFor } from '../usage.js';
 
 export const SIM_PROJECTS = { web: 'kopiku-web', model: 'kopiku-3d' };
@@ -56,6 +57,52 @@ export const SCENARIO = [
   s(56, 'report', 'manager', 'ceo', 'Semua beres. Laporan di reports/. Butuh keputusan CEO: setujui harga paket?'),
   s(58, 'report', 'manager', 'ceo', 'Render 3D kemasan siap untuk iklan Reels.', M3D),
 ];
+
+// Pesan contoh bahasa Inggris, urutannya sama dengan SCENARIO (pesan Indonesia ada di entri SCENARIO).
+export const SCENARIO_EN = [
+  'Launch the KopiKu product this week: landing page, pricing plans, and a promo video.',
+  'Drafting the plan: Dev, Sales, and Content run in parallel.',
+  'Build the KopiKu landing page, responsive and accessible.',
+  'Write a 30-second Reels script for the KopiKu launch.',
+  'Write the landing page copy: headline, 3 benefits, CTA.',
+  'Building the Hero and Navbar components…',
+  'Drafting the hook for the first 3 seconds…',
+  'Writing the headline and 3 benefits…',
+  'Second session: 3D render of the KopiKu package for the Reels ad.',
+  'Model a 250 g coffee package, clean low-poly.',
+  'Blocking out the package shape…',
+  'Mobile layout done, moving on to desktop.',
+  'Package model done, 2,400 polygons.',
+  'Need the pricing list. Please ask sales-pricing.',
+  'Apply kraft paper and KopiKu label materials.',
+  'Creating the kraft and label textures…',
+  'Copy is ready: headline, 3 benefits, CTA, and FAQ.',
+  'Draft 3 KopiKu pricing plans based on competitor prices.',
+  'Comparing prices from 5 competitors…',
+  'Kraft and label materials done.',
+  'Animate the package spinning for 6 seconds.',
+  'Setting up the spin keyframes…',
+  '3 plans: Saver 25k, Favorite 45k, Sultan 80k.',
+  'Prices are in: Saver 25k, Favorite 45k, Sultan 80k. Continue the script.',
+  'Writing scenes and the CTA…',
+  'Landing page done, build passes with no errors.',
+  '6-second spin animation ready, 24 fps.',
+  'Test the landing page: automated tests and edge cases.',
+  'Audit the landing page for security and dependencies.',
+  'Running 18 tests…',
+  'npm audit and security header checks…',
+  'Render 1080x1920 for Reels, 144 frames.',
+  'Rendering frames 1–144…',
+  'The 30-second Reels script is done, ready to animate.',
+  '18/18 tests pass. 1 small form bug was fixed by dev-frontend.',
+  'No critical findings. 0 dependency vulnerabilities.',
+  'Render of 144 frames done, file ready to upload.',
+  'All done. Report in reports/. CEO decision needed: approve the pricing plans?',
+  'The 3D package render is ready for the Reels ad.',
+];
+
+/** Pesan event ke-i dalam bahasa `lang` (id = teks asli SCENARIO, en = SCENARIO_EN). */
+export const scenarioMessage = (i, lang = getLang()) => (lang === 'en' ? SCENARIO_EN[i] : SCENARIO[i].event.message);
 
 export const SCENARIO_DURATION = SCENARIO[SCENARIO.length - 1].at;
 
@@ -148,18 +195,19 @@ export function buildSimUsage(percent, { now = new Date(), limit = SIM_WEEKLY_LI
 /**
  * Putar skenario. onEvent dipanggil dengan event yang sudah dinormalisasi (source: "sim").
  * onUsage (opsional) dipanggil dengan objek usage contoh sesuai SIM_USAGE_TIMELINE.
+ * `lang` (opsional) memaksa bahasa pesan; bawaan: bahasa aktif saat tiap event diputar.
  * Mengembalikan { stop() }. `schedule`, `cancel`, dan `now` bisa diganti di test.
  */
 export function playScenario(
   onEvent,
-  { speed = 1, onFinish, onUsage, schedule = setTimeout, cancel = clearTimeout, now = () => new Date() } = {},
+  { speed = 1, lang, onFinish, onUsage, schedule = setTimeout, cancel = clearTimeout, now = () => new Date() } = {},
 ) {
   // Setelah selesai/dihentikan, tidak ada lagi data simulasi yang boleh keluar (walau timer telat jalan).
   let ended = false;
   const timers = SCENARIO.map(({ at, event }, i) =>
     schedule(() => {
       if (ended) return;
-      const r = normalizeEvent({ ...event, source: 'sim' });
+      const r = normalizeEvent({ ...event, message: scenarioMessage(i, lang ?? getLang()), source: 'sim' });
       if (r.ok) onEvent(r.event);
       if (i === SCENARIO.length - 1) {
         ended = true;

@@ -29,14 +29,45 @@ export function isNodeSupported(version, min) {
   return c === null ? true : c >= 0;
 }
 
-/** Pesan galat untuk pengguna (bahasa Indonesia), atau null bila versinya cukup. */
-export function nodeVersionProblem(version, min) {
+/**
+ * Kode bahasa pengguna: 'id' atau 'en'. Sintaks lama dan tanpa impor (modul ini harus tetap bisa dimuat di Node tua).
+ * Urutan sama dengan shared/i18n.js: AI_OFFICE_LANG, LC_ALL, LC_MESSAGES, LANG, lalu Intl; nilai kosong, C, dan POSIX dilewati.
+ */
+export function pickLang(env) {
+  var keys = ['AI_OFFICE_LANG', 'LC_ALL', 'LC_MESSAGES', 'LANG'];
+  var value = '';
+  for (var i = 0; i < keys.length && !value; i++) {
+    var v = env && typeof env[keys[i]] === 'string' ? env[keys[i]].trim() : '';
+    if (v && v !== 'C' && v !== 'POSIX') value = v;
+  }
+  if (!value) {
+    try {
+      value = Intl.DateTimeFormat().resolvedOptions().locale;
+    } catch (e) {
+      value = '';
+    }
+  }
+  var m = /^([a-z]{2,3})(?:[-_.@]|$)/i.exec(String(value).trim());
+  var code = m ? m[1].toLowerCase() : '';
+  return code === 'id' || code === 'in' || code === 'ind' ? 'id' : 'en';
+}
+
+/** Pesan galat untuk pengguna (Indonesia atau Inggris menurut pickLang), atau null bila versinya cukup. */
+export function nodeVersionProblem(version, min, lang) {
   var need = min || MIN_NODE;
   if (isNodeSupported(version, need)) return null;
+  var shortNeed = need.replace(/\.0$/, '');
+  var have = String(version).replace(/^v/, '');
+  if ((lang || pickLang(process.env)) === 'id') {
+    return (
+      'AI Office membutuhkan Node.js ' + shortNeed + ' atau lebih baru, tetapi yang terpasang v' + have + '.\n' +
+      'Cara upgrade: pasang Node.js LTS terbaru dari https://nodejs.org, atau lewat pengelola versi ' +
+      '(nvm, fnm, Volta; Windows: winget install OpenJS.NodeJS.LTS; macOS: brew install node), lalu buka terminal baru.'
+    );
+  }
   return (
-    'AI Office membutuhkan Node.js ' + need.replace(/\.0$/, '') + ' atau lebih baru, tetapi yang terpasang v' +
-    String(version).replace(/^v/, '') + '.\n' +
-    'Cara upgrade: pasang Node.js LTS terbaru dari https://nodejs.org, atau lewat pengelola versi ' +
-    '(nvm, fnm, Volta; Windows: winget install OpenJS.NodeJS.LTS; macOS: brew install node), lalu buka terminal baru.'
+    'AI Office needs Node.js ' + shortNeed + ' or newer, but v' + have + ' is installed.\n' +
+    'How to upgrade: install the latest Node.js LTS from https://nodejs.org, or use a version manager ' +
+    '(nvm, fnm, Volta; Windows: winget install OpenJS.NodeJS.LTS; macOS: brew install node), then open a new terminal.'
   );
 }

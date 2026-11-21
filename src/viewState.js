@@ -5,6 +5,8 @@
 //   banner = masalah koneksi: null | 'reconnecting' (pernah terhubung lalu putus) | 'unreachable' (belum pernah berhasil)
 // Reconnect selalu otomatis (src/net.js), jadi kedua banner menyebut "menyambung ulang".
 
+import { t } from './i18n.js';
+
 export const initialLink = { conn: 'connecting', everOnline: false, failed: false, everHello: false };
 
 /**
@@ -44,30 +46,31 @@ export function stageState({ link, hasEvents, simRunning = false }) {
   return { stage, banner, view };
 }
 
-export const CONN_LABEL = {
-  connecting: 'Menghubungkan…',
-  online: 'Terhubung ke server',
-  reconnecting: 'Terputus, menyambung ulang…',
-  unreachable: 'Server tidak terjangkau, menyambung ulang…',
-};
+// Teks tampilan dibaca lewat getter supaya selalu mengikuti bahasa aktif (src/i18n.js, namespace `ui`).
+const lazy = (map) =>
+  Object.defineProperties(
+    {},
+    Object.fromEntries(Object.entries(map).map(([k, v]) => [k, { enumerable: true, get: typeof v === 'function' ? v : () => t(v) }])),
+  );
+
+export const CONN_LABEL = lazy({
+  connecting: 'ui.conn.connecting',
+  online: 'ui.conn.online',
+  reconnecting: 'ui.conn.reconnecting',
+  unreachable: 'ui.conn.unreachable',
+});
 
 export const BANNER_TEXT = {
-  reconnecting: {
-    title: 'Koneksi terputus',
-    body: 'Menyambung ulang otomatis. Simulasi dan perintah tetap jalan secara lokal.',
-  },
-  unreachable: {
-    title: 'Server tidak terjangkau',
-    body: 'Menyambung ulang otomatis. Pastikan server AI Office berjalan. Simulasi tetap bisa dipakai.',
-  },
+  reconnecting: lazy({ title: 'ui.banner.reconnecting.title', body: 'ui.banner.reconnecting.body' }),
+  unreachable: lazy({ title: 'ui.banner.unreachable.title', body: 'ui.banner.unreachable.body' }),
 };
 
-export const LOADING_TEXT = { title: 'Menghubungkan ke server…', body: 'Memuat kantor dan riwayat kejadian.' };
+export const LOADING_TEXT = lazy({ title: 'ui.loading.title', body: 'ui.loading.body' });
 
-export const EMPTY_TEXT = {
-  title: 'Kantor masih sepi',
-  body: 'Belum ada kejadian. Agen mulai bergerak begitu Claude Code mengirim tugas.',
-  simulate: 'Coba simulasi',
-  hooksIntro: 'Atau pasang hooks agar sesi asli tampil:',
-  hooksCommand: 'npm run hooks:install-user',
-};
+export const EMPTY_TEXT = lazy({
+  title: 'ui.empty.title',
+  body: 'ui.empty.body',
+  simulate: 'ui.empty.simulate',
+  hooksIntro: 'ui.empty.hooksIntro',
+  hooksCommand: () => 'npm run hooks:install-user',
+});

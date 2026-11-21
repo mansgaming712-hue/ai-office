@@ -1,6 +1,7 @@
 // Nama proyek sesi (field opsional `project` di event) dan daftar "Sesi aktif".
 // Fungsi murni tanpa DOM supaya bisa dites di Node.
 import { stripControl, truncate } from '../shared/events.js';
+import { t } from './i18n.js';
 
 export const PROJECT_MAX = 40;
 export const ACTIVE_WINDOW_MS = 10 * 60 * 1000;
@@ -62,8 +63,8 @@ export function dropSimSessions(sessions) {
   return changed;
 }
 
-/** "baru saja", "3 mnt lalu". */
+/** "baru saja", "3 mnt lalu" (atau "just now", "3 min ago"). */
 export function ago(ms, now = Date.now()) {
   const min = Math.floor(Math.max(0, now - ms) / 60000);
-  return min < 1 ? 'baru saja' : `${min} mnt lalu`;
+  return min < 1 ? t('ui.time.justNow') : t('ui.time.minAgo', { n: min });
 }

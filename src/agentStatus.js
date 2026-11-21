@@ -3,6 +3,8 @@
 // cara UI menampilkannya. Engine animasi menyimpan status internal (idle/working/done/blocked);
 // `uiStatusOf` menerjemahkannya. Fungsi murni tanpa DOM supaya bisa dites di Node.
 
+import { t } from './i18n.js';
+
 export const UI_STATUSES = ['idle', 'bekerja', 'selesai', 'error'];
 
 const ENGINE_TO_UI = { idle: 'idle', working: 'bekerja', done: 'selesai', blocked: 'error' };
@@ -27,14 +29,34 @@ export function statusForEvent(type, previous = 'idle') {
  * label teks dan bitmap ikon (siluet + tanda di tengah) yang berbeda.
  * `fill` dipakai untuk badan ikon, `mark` untuk tanda di dalamnya.
  */
-export const STATUS_INFO = {
-  idle: { label: 'idle', title: 'Menunggu tugas', fill: '#8b93a1', mark: '#8b93a1' },
-  bekerja: { label: 'bekerja', title: 'Sedang bekerja', fill: '#e8b931', mark: '#2a2333' },
-  selesai: { label: 'selesai', title: 'Tugas selesai', fill: '#3f9e54', mark: '#ffffff' },
-  error: { label: 'error', title: 'Error: agen melapor butuh bantuan', fill: '#e04848', mark: '#ffffff' },
+const COLORS = {
+  idle: { fill: '#8b93a1', mark: '#8b93a1' },
+  bekerja: { fill: '#e8b931', mark: '#2a2333' },
+  selesai: { fill: '#3f9e54', mark: '#ffffff' },
+  error: { fill: '#e04848', mark: '#ffffff' },
 };
 
-export const STATUS_LABEL = Object.fromEntries(UI_STATUSES.map((s) => [s, STATUS_INFO[s].label]));
+// `label` dan `title` dihitung saat dibaca (getter), jadi selalu mengikuti bahasa aktif (src/i18n.js).
+export const STATUS_INFO = Object.fromEntries(
+  UI_STATUSES.map((s) => [
+    s,
+    {
+      get label() {
+        return t(`ui.status.${s}`);
+      },
+      get title() {
+        return t(`ui.statusTitle.${s}`);
+      },
+      ...COLORS[s],
+    },
+  ]),
+);
+
+/** { idle: 'idle', bekerja: 'bekerja' | 'working', ... } menurut bahasa aktif (getter). */
+export const STATUS_LABEL = Object.defineProperties(
+  {},
+  Object.fromEntries(UI_STATUSES.map((s) => [s, { enumerable: true, get: () => STATUS_INFO[s].label }])),
+);
 
 /**
  * Ikon pixel 9x9. Huruf: k = garis tepi, f = warna status, m = tanda, p = kertas (latar ikon),
@@ -109,9 +131,9 @@ export function countStatuses(statuses) {
  */
 export function summaryText(counts) {
   const total = UI_STATUSES.reduce((a, s) => a + (counts[s] ?? 0), 0);
-  if (total === 0) return 'Belum ada agen';
+  if (total === 0) return t('ui.summary.none');
   const parts = ['bekerja', 'selesai', 'error'].filter((s) => counts[s] > 0).map((s) => `${counts[s]} ${STATUS_LABEL[s]}`);
-  return parts.length ? parts.join(', ') : 'Semua agen idle';
+  return parts.length ? parts.join(', ') : t('ui.summary.allIdle');
 }
 
 /**

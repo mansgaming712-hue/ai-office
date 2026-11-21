@@ -7,7 +7,7 @@ import {
   CELL, DECOR, DOOR, H, MANAGER_SPOT, W, WALL_H, ZONES, obstacles, otherSeat, rosterSeats, workstation, zoneList,
 } from '../src/office/layout.js';
 import { createGrid, findPath } from '../src/office/pathfinding.js';
-import { WARNING_TEXT } from '../src/usage.js';
+import { warningText } from '../src/usage.js';
 
 const NAMES_3D = ['3d-modeler', '3d-materials', '3d-animator', '3d-render'];
 const ev = (type, from, to, message = '', extra = {}) => normalizeEvent({ type, from, to, message, ...extra }).event;
@@ -206,10 +206,10 @@ describe('engine: peringatan limit di manajer', () => {
     const o = new Office();
     expect(o.managerBubble()).toBeNull();
     o.setLimitWarning(true);
-    expect(o.managerBubble()).toMatchObject({ text: WARNING_TEXT, kind: 'warning', sticky: true });
+    expect(o.managerBubble()).toMatchObject({ text: warningText(), kind: 'warning', sticky: true });
     run(o, 30);
-    expect(o.managerBubble()?.text).toBe(WARNING_TEXT);
-    expect(o.snapshot().manager).toMatchObject({ limitWarning: true, shownBubble: WARNING_TEXT, bubble: null });
+    expect(o.managerBubble()?.text).toBe(warningText());
+    expect(o.snapshot().manager).toMatchObject({ limitWarning: true, shownBubble: warningText(), bubble: null });
   });
 
   it('bubble tugas biasa didahulukan, lalu peringatan muncul lagi', () => {
@@ -218,7 +218,7 @@ describe('engine: peringatan limit di manajer', () => {
     o.handleEvent(ev('report', 'manager', 'ceo', 'Laporan siap'));
     expect(o.managerBubble().text).toBe('Laporan siap');
     run(o, 6);
-    expect(o.managerBubble().text).toBe(WARNING_TEXT);
+    expect(o.managerBubble().text).toBe(warningText());
   });
 
   it('hilang begitu nilainya turun (setLimitWarning(false)); bertahan saat reset()', () => {

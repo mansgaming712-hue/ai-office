@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { connect, getUsage } from '../src/net.js';
 import {
-  CONFIG_HINT, LEVEL_INFO, UNAVAILABLE_TEXT, USAGE_LABEL, WARNING_TEXT,
+  configHint, LEVEL_INFO, unavailableText, usageLabel, warningText,
   chartBars, displayUsage, formatFull, formatPercent, formatTokens, isLimitWarning, levelFor,
   parseUsageResponse, usageState, validateUsage,
 } from '../src/usage.js';
@@ -113,7 +113,7 @@ describe('warna bar mingguan: hijau < 60, kuning 60–85, merah > 85', () => {
       expect(r.usage.weekly).toMatchObject({ configured: false, percent: null, level: null, limit: null });
       expect(isLimitWarning(usageState(r))).toBe(false);
     }
-    expect(CONFIG_HINT).toBe('Isi weeklyTokenLimit di limit-config.json');
+    expect(configHint()).toBe('Isi weeklyTokenLimit di limit-config.json');
   });
 
   it('setiap level punya label teks (warna tidak berdiri sendiri)', () => {
@@ -131,7 +131,7 @@ describe('validateUsage: data valid', () => {
     expect(r.usage.topAgents.map((a) => a.agent)).toEqual(['3d-render', '3d-modeler', 'dev-frontend', 'dev-qa', 'sales-pricing']);
     expect(r.usage.agentCount).toBe(6);
     expect(r.usage.estimate).toBe(true);
-    expect(USAGE_LABEL).toBe('Estimasi, angka resmi cek /usage');
+    expect(usageLabel()).toBe('Estimasi, angka resmi cek /usage');
   });
 
   it('lebih dari 7 hari → hanya 7 terakhir; nama agen dibersihkan dari karakter kontrol', () => {
@@ -194,13 +194,13 @@ describe('validateUsage: data rusak → "data tidak tersedia", tidak pernah mele
     const evil = sample();
     Object.defineProperty(evil, 'weekly', { get() { throw new Error('boom'); } });
     expect(() => validateUsage(evil)).not.toThrow();
-    expect(validateUsage(evil)).toEqual({ ok: false, reason: UNAVAILABLE_TEXT });
+    expect(validateUsage(evil)).toEqual({ ok: false, reason: unavailableText() });
   });
 
   it('available false: alasan dari server (dibersihkan) dipakai bila ada, selain itu "data tidak tersedia"', () => {
     expect(validateUsage({ available: false, reason: 'no-transcripts\u001b[0m' })).toEqual({ ok: false, reason: 'no-transcripts' });
-    expect(validateUsage({ available: false, reason: null }).reason).toBe(UNAVAILABLE_TEXT);
-    expect(UNAVAILABLE_TEXT).toBe('data tidak tersedia');
+    expect(validateUsage({ available: false, reason: null }).reason).toBe(unavailableText());
+    expect(unavailableText()).toBe('data tidak tersedia');
   });
 
   it('parseUsageResponse: fetch gagal, HTTP error, atau ok:false → tidak tersedia', () => {
@@ -233,7 +233,7 @@ describe('pemicu peringatan manajer (> 85%)', () => {
     expect(isLimitWarning(null)).toBe(false);
     expect(isLimitWarning(undefined)).toBe(false);
     expect(isLimitWarning({ status: 'unavailable', reason: 'x' })).toBe(false);
-    expect(WARNING_TEXT).toBe('Limit hampir habis, hemat mode');
+    expect(warningText()).toBe('Limit hampir habis, hemat mode');
   });
 
   it('displayUsage: data simulasi hanya menimpa tampilan; null → kembali ke data server', () => {
@@ -324,6 +324,6 @@ describe('src/net.js: pesan WebSocket usage + GET /api/usage', () => {
     }));
     const bad = await getUsage();
     expect(bad).toEqual({ status: null, body: undefined });
-    expect(parseUsageResponse(bad.status, bad.body)).toEqual({ ok: false, reason: UNAVAILABLE_TEXT });
+    expect(parseUsageResponse(bad.status, bad.body)).toEqual({ ok: false, reason: unavailableText() });
   });
 });

@@ -1,8 +1,10 @@
+import { useLang } from '../i18n.js';
 import { BANNER_TEXT, EMPTY_TEXT, LOADING_TEXT } from '../viewState.js';
 import { OfficeSkeleton, PixelSpinner } from './Skeleton.jsx';
 
 /** Menutupi kanvas selama belum pernah terhubung ke server (muncul setelah jeda singkat, lihat CSS). */
 export function LoadingNotice() {
+  useLang();
   return (
     <div className="stage-loading">
       <OfficeSkeleton />
@@ -17,6 +19,7 @@ export function LoadingNotice() {
 
 /** Kantor terhubung tapi belum ada kejadian: jelaskan dan beri dua jalan keluar. */
 export function EmptyCard({ onSimulate }) {
+  useLang();
   return (
     <section className="stage-card" aria-labelledby="empty-title">
       <h2 id="empty-title" className="notice-title">{EMPTY_TEXT.title}</h2>
@@ -38,6 +41,7 @@ export function EmptyCard({ onSimulate }) {
 
 /** Koneksi putus atau server tidak terjangkau; reconnect berjalan otomatis. */
 export function ConnectionBanner({ kind }) {
+  useLang();
   const text = BANNER_TEXT[kind];
   if (!text) return null;
   return (

@@ -31,7 +31,9 @@ const AFFECTING = ['HOST', 'PORT', 'CLAUDE_PROJECT_DIR', 'NODE_USE_ENV_PROXY', '
 export function cleanEnv(extra = {}) {
   const env = { ...process.env };
   for (const k of Object.keys(env)) if (k.startsWith('AI_OFFICE_') || AFFECTING.includes(k)) delete env[k];
-  return { ...env, ...extra };
+  // Pesan CLI berbahasa Indonesia untuk proses anak (test lama mengecek teks Indonesia); `extra` boleh menimpa.
+  // Runner key di folder sementara: proses anak uji tidak menyentuh ~/.ai-office milik pengguna.
+  return { ...env, AI_OFFICE_LANG: 'id', AI_OFFICE_RUNNER_KEY_FILE: join(tmpdir(), 'ai-office-vitest-runner-key'), ...extra };
 }
 
 /** Jalankan server AI Office di dalam proses test (port 0). */

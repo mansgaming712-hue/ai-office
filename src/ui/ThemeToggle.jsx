@@ -1,3 +1,5 @@
+import { t, useLang } from '../i18n.js';
+
 const SUN = [
   '....#....',
   '.#..#..#.',
@@ -35,15 +37,17 @@ function PixelIcon({ rows }) {
 
 /** Tombol ganti tema. Teks menyebut tema tujuan; bisa dipakai dengan keyboard (Enter/Spasi). */
 export default function ThemeToggle({ theme, onToggle }) {
+  useLang();
   const toLight = theme === 'dark';
-  const label = toLight ? 'Terang' : 'Gelap';
+  const label = t(toLight ? 'ui.theme.light' : 'ui.theme.dark');
+  const current = t(toLight ? 'ui.theme.dark' : 'ui.theme.light');
   return (
     <button
       type="button"
       className="btn btn-theme"
       onClick={onToggle}
-      aria-label={`Ganti ke tema ${label.toLowerCase()}. Sekarang tema ${toLight ? 'gelap' : 'terang'}.`}
-      title={`Ganti ke tema ${label.toLowerCase()}`}
+      aria-label={t('ui.theme.switch', { target: label.toLowerCase(), current: current.toLowerCase() })}
+      title={t('ui.theme.switchTitle', { target: label.toLowerCase() })}
     >
       <PixelIcon rows={toLight ? SUN : MOON} />
       <span>{label}</span>

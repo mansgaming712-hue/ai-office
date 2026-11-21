@@ -274,7 +274,7 @@ describe('deploy/ai-office.env.example', () => {
 describe('nama variabel lingkungan di deploy/ dan docs/DEPLOY.md', () => {
   it('daftar yang dikenal (dibaca dari kode) sesuai kontrak', () => {
     expect([...SERVER_ENV].sort()).toEqual([
-      'AI_OFFICE_ALLOWED_HOSTS', 'AI_OFFICE_DEV_ORIGINS', 'AI_OFFICE_LOG_MESSAGES', 'AI_OFFICE_TOKEN', 'AI_OFFICE_TOKEN_FILE', 'AI_OFFICE_TRUST_PROXY', 'HOST', 'PORT',
+      'AI_OFFICE_ALLOWED_HOSTS', 'AI_OFFICE_DEV_ORIGINS', 'AI_OFFICE_LOG_MESSAGES', 'AI_OFFICE_PRINT_KEY', 'AI_OFFICE_RUNNER', 'AI_OFFICE_TOKEN', 'AI_OFFICE_TOKEN_FILE', 'AI_OFFICE_TRUST_PROXY', 'HOST', 'PORT',
     ]);
     // CLAUDE_PROJECT_DIR: diisi Claude Code sendiri (nama proyek di event), bukan konfigurasi deploy.
     expect([...HOOK_ENV].sort()).toEqual(['AI_OFFICE_DEBUG', 'AI_OFFICE_TIMEOUT_MS', 'AI_OFFICE_TOKEN', 'AI_OFFICE_TOKEN_FILE', 'AI_OFFICE_URL', 'CLAUDE_PROJECT_DIR']);
