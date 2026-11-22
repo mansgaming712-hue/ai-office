@@ -7,6 +7,7 @@ import { drawBackground, drawClock, drawSkyFx, drawSteam } from '../../src/offic
 import { createRenderer } from '../../src/office/render.js';
 import { canvasFactory, recordingCtx, sha } from './recordCanvas.js';
 
+export const SNAPSHOT_TZ = 'Asia/Jakarta';
 export const FIXED_NOW = Date.UTC(2026, 0, 15, 9, 41, 27);
 const ev = (type, from, to, message = 'x') => normalizeEvent({ type, from, to, message }).event;
 
@@ -31,6 +32,19 @@ const hashOf = (fn) => {
  * variantKey: 'light' | 'dark'. Kunci hasil sama untuk renderer lama dan baru.
  */
 export function snapshot(api, variantKey) {
+  // Jarum jam dihitung dari jam LOKAL (benar untuk pengguna); fixture dibuat di WIB, jadi zona waktu dikunci di sini
+  // supaya hash tidak bergantung mesin/CI. Dikembalikan setelah selesai.
+  const prevTz = process.env.TZ;
+  process.env.TZ = SNAPSHOT_TZ;
+  try {
+    return snapshotInTz(api, variantKey);
+  } finally {
+    if (prevTz === undefined) delete process.env.TZ;
+    else process.env.TZ = prevTz;
+  }
+}
+
+function snapshotInTz(api, variantKey) {
   const P = api.palette(variantKey);
   const out = {};
   out.background = hashOf((c) => api.background(c, P));
