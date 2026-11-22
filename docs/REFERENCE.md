@@ -13,6 +13,7 @@ Contents:
 - [Authentication, server modes, and the runner key](#authentication-server-modes-and-the-runner-key)
 - [Autostart](#autostart)
 - [User-made divisions](#user-made-divisions)
+- [Office themes and settings](#office-themes-and-settings)
 - [Tests and checks](#tests-and-checks)
 - [Project structure](#project-structure)
 
@@ -617,6 +618,59 @@ character that has a desk.
 | `plant-talk` | Small green marks by the plant. Needs a desk. |
 | `doodle` | A small doodle on the desk. Needs a desk. |
 
+## Office themes and settings
+
+The office background has five built-in themes, and a **Settings** dialog picks the theme, the time mode, the motion
+setting, and rain. A theme is a `themes/<id>/theme.json` file: data only, with no code. To write one, see
+[Creating a theme](../CONTRIBUTING.md#creating-a-theme).
+
+Where the code is:
+
+- `themes/` (data), `shared/themes.js` (validator and limits)
+- `src/office/themeRegistry.js` (loads the themes at build time), `src/office/decor.js` (decoration drawing), `src/office/palette.js` (palettes and `CONTRAST_PAIRS`)
+- `src/settings.js` (settings store), `src/ui/SettingsDialog.jsx` (dialog)
+
+### Themes
+
+| Id | Notes |
+| --- | --- |
+| `jakarta` | Default. The original look. Its `theme.json` defines every palette key, and the other themes fall back to it. |
+| `startup-cozy` | Built-in theme. |
+| `cyberpunk` | Built-in theme. |
+| `kafe` | Built-in theme. |
+| `stasiun-luar-angkasa` | Built-in theme. |
+
+The id is the folder name. An invalid theme is skipped with a warning, and the Settings dialog lists it. If the stored
+theme id does not match an installed theme, the dashboard shows `jakarta`, and the stored value is kept.
+
+### Settings
+
+The settings are one JSON object in `localStorage` under `ai-office-settings` (see [localStorage keys](#localstorage-keys)).
+
+| Field | Values | Default | Meaning |
+| --- | --- | --- | --- |
+| `officeTheme` | a theme id | `jakarta` | The office theme. |
+| `timeMode` | `follow`, `day`, `night` | `follow` | `follow` uses the light or dark interface theme (light = day, dark = night). `day` and `night` fix the look. |
+| `motion` | `system`, `reduce`, `full` | `system` | `system` follows `prefers-reduced-motion`. `reduce` and `full` override it. |
+| `rain` | `true`, `false` | `false` | Rain in the office. The checkbox is off and disabled while reduced motion is on. The saved value is kept. |
+
+The root element gets `data-motion="reduce"` or `data-motion="full"`, and the attribute is removed for `system`.
+
+### localStorage keys
+
+| Key | Value | Owner | Notes |
+| --- | --- | --- | --- |
+| `ai-office-settings` | JSON, for example `{"v":1,"officeTheme":"jakarta","timeMode":"follow","motion":"system","rain":false}` | `src/settings.js` | `v` must be `1`. Unknown fields are dropped when saved. Values longer than 4096 characters, invalid JSON, or another `v` count as corrupt, and the defaults are used. |
+| `ai-office-rain` | `"1"` for rain on, anything else for off | `src/settings.js` (legacy) | Read only when `ai-office-settings` does not exist. It is then copied into the new key. The code does not delete it. If `ai-office-settings` exists but is corrupt, the defaults are used, `rain` still reads this key, and nothing is written. |
+| `ai-office-lang` | `en` or `id` | `src/i18n.js` | Interface language. Read before the first render. Not part of the settings object. |
+| `ai-office-theme` | `dark` or `light` | `src/theme.js` and `public/theme-init.js` | Light or dark interface theme, separate from the office theme. If it is missing or invalid, the system preference is used, and an unknown preference means `dark`. |
+
+All storage access is wrapped in `try`/`catch`. If storage is blocked or full, changes still apply in memory until the
+page is reloaded.
+
+Identifiers in this section (theme ids, `follow`, `day`, `night`, `system`, `reduce`, `full`, and the key names) are the
+same in the English and Indonesian reference.
+
 ## Tests and checks
 
 ```bash
@@ -645,6 +699,7 @@ agents/                    17 subagent definitions (source), including the 3D di
 divisions/                your own divisions, one folder each (only README.md ships); see CONTRIBUTING.md
 division-packs/           starter packs for npm run division:add (dev-team, content-team, research-team, example-legal)
 locales/                   translations: en.json and id.json (namespaces cli, ui, office)
+themes/                    office themes, one folder each with theme.json (jakarta is the default); see CONTRIBUTING.md
 CLAUDE.md                  manager rules (used by Claude Code when it runs in this folder)
 output/                    task and demo results, one folder per run (created automatically, git-ignored)
 data/                      usage statistics cache (created automatically, git-ignored)
