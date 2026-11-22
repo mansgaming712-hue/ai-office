@@ -6,9 +6,11 @@ import {
   CELL, DOOR, H, MANAGER_SPOT, PANTRY, W, obstacles, otherSeat, rosterSeats,
 } from './layout.js';
 import { createGrid, findPath } from './pathfinding.js';
-import { t } from '../i18n.js';
+import { getLang, t } from '../i18n.js';
 import { advanceAlongPath, nextSpeed, remainingLength } from '../motion.js';
+import { personalityOf, speechLines } from '../personality.js';
 import { projectOf } from '../sessions.js';
+import { idleBehavior } from './quirks.js';
 
 // Label per status internal engine (idle/working/done/blocked) untuk kanvas, menurut bahasa aktif
 // (getter, namespace `office` di locales/*.json). Nilainya sama dengan label status UI (idle/bekerja/selesai/error).
@@ -39,6 +41,9 @@ export const TUNING = {
   maxAway: 2,
   sendPose: 0.7, // detik pose "kirim" saat amplop hasil keluar dari meja worker
   rainFade: 0.7, // per detik
+  phraseFirst: [20, 40], // jeda sebelum frasa kepribadian pertama (detik, acak deterministik)
+  phraseEvery: [25, 55], // jeda antar frasa kepribadian
+  phraseFor: 3, // lama bubble frasa
 };
 
 // Obrolan santai di pantry (hanya agen yang benar-benar idle). Kunci office.chat.1..N di locales.
@@ -58,15 +63,24 @@ function makeRng(seed) {
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
+/**
+ * opts (semuanya opsional; untuk test deterministik):
+ *  - seed: biji RNG mulberry32 (bawaan 20241121)
+ *  - rng: fungsi () => [0,1) pengganti RNG (dipakai untuk perilaku pantry dan kepribadian)
+ *  - personalityFor: (id) => kepribadian lengkap (bawaan: src/personality.js). Jam engine = jumlah dt yang diberikan ke update().
+ */
 export class Office {
-  constructor() {
+  constructor(opts = {}) {
+    this.opts = opts;
     this.reset();
   }
 
   reset() {
     this.seats = rosterSeats();
     this.time = 0;
-    this.rng = makeRng(20241121);
+    const seed = this.opts.seed ?? 20241121;
+    this.rng = this.opts.rng ?? makeRng(seed);
+    this.prng = this.opts.rng ?? makeRng(seed ^ 0x9e3779b9); // aliran terpisah: kepribadian tidak mengubah urutan perilaku pantry
     this.pantryTimer = this.#range(TUNING.pantryFirst);
     this.chatTimer = 0;
     this.rainOn = this.rainOn ?? false; // pilihan pengguna (tombol hujan) dipertahankan saat reset
@@ -89,9 +103,10 @@ export class Office {
       speed: 0,
       bubble: null,
       typingUntil: 0,
+      phraseIn: null,
     };
     // CEO berdiri di dekat pintu: memberi perintah (amplop) dan menerima laporan manajer.
-    this.ceo = { x: DOOR.enter.x, y: DOOR.enter.y, facing: 'down', bubble: null, giveUntil: -Infinity, cheerUntil: -Infinity };
+    this.ceo = { x: DOOR.enter.x, y: DOOR.enter.y, facing: 'down', bubble: null, giveUntil: -Infinity, cheerUntil: -Infinity, phraseIn: null };
     this.queue = [];
     this.envelopes = [];
     this.popups = [];
@@ -105,6 +120,11 @@ export class Office {
 
   #range([a, b]) {
     return a + this.rng() * (b - a);
+  }
+
+  /** Kepribadian lengkap (hanya tampilan) untuk id worker/manajer/CEO; tanpa data = default netral. */
+  personality(id) {
+    return (this.opts.personalityFor ?? personalityOf)(id);
   }
 
   #addWorker(name, station, dynamic) {
@@ -144,6 +164,7 @@ export class Office {
       },
       statusSince: -Infinity,
       bubble: null,
+      phraseIn: null,
       pending: 0,
       deferred: [],
       lastEnvelopeAt: -Infinity,
@@ -412,7 +433,7 @@ export class Office {
       w.status === 'idle' &&
       w.pending === 0 &&
       !w.deferred.length &&
-      !w.bubble &&
+      (!w.bubble || w.bubble.ambient) && // frasa kepribadian tidak menghalangi jadwal pantry
       !this.queue.some((j) => j.to === w.name) &&
       !this.scheduled.some((s) => s.worker === w.name)
     );
@@ -470,10 +491,12 @@ export class Office {
       this.pantryTimer -= dt;
       if (this.pantryTimer <= 0) {
         this.pantryTimer = this.#range(TUNING.pantryGap);
-        const calm = [...this.workers.values()].filter((w) => this.#isCalm(w) && !w.dynamic);
+        // hanya yang kebiasaan idle-nya berjalan ke pantry (kopi, air, camilan, tanaman, ngobrol); netral = kopi
+        const calm = [...this.workers.values()].filter((w) => this.#isCalm(w) && !w.dynamic && idleBehavior(this.personality(w.name).idle).trip);
         if (calm.length && away.length < TUNING.maxAway) this.#startTrip(calm[Math.floor(this.rng() * calm.length)]);
       }
     }
+    this.#updatePhrases(dt);
     for (const w of away) {
       if (w.mode === 'out' || w.mode === 'back') {
         if (w.mode === 'out' && w.rise > 0) {
@@ -530,6 +553,45 @@ export class Office {
         if (!speaker.bubble) speaker.bubble = this.#bubble(t(`office.chat.${n}`), 'chat', 2.2);
       }
     }
+  }
+
+  #prange([a, b]) {
+    return a + this.prng() * (b - a);
+  }
+
+  /**
+   * Frasa kepribadian di bubble saat idle atau bekerja (sesekali). Hanya teks: tidak mengubah status, antrean,
+   * atau event. Tanpa frasa/tone (netral) tidak ada bubble.
+   */
+  #tickPhrase(e, id, can, dt) {
+    if (e.phraseIn === null || e.phraseIn === undefined) e.phraseIn = this.#prange(TUNING.phraseFirst);
+    e.phraseIn -= dt;
+    if (e.phraseIn > 0) return;
+    e.phraseIn = this.#prange(TUNING.phraseEvery);
+    if (!can) return;
+    const lines = speechLines(this.personality(id), getLang());
+    if (!lines.length) return;
+    const text = lines[Math.min(lines.length - 1, Math.floor(this.prng() * lines.length))];
+    e.bubble = this.#bubble(text, 'chat', TUNING.phraseFor);
+    if (e.bubble) e.bubble.ambient = true;
+  }
+
+  #updatePhrases(dt) {
+    for (const w of this.workers.values()) {
+      const can =
+        w.mode === 'seat' &&
+        (w.status === 'idle' || w.status === 'working') &&
+        !w.bubble &&
+        w.pending === 0 &&
+        !w.deferred.length &&
+        !this.queue.length &&
+        !this.scheduled.some((s) => s.worker === w.name);
+      this.#tickPhrase(w, w.name, can && !w.dynamic, dt);
+    }
+    const m = this.manager;
+    this.#tickPhrase(m, MANAGER_ID, m.state === 'sitting' && !m.bubble && !this.limitWarning && !this.queue.length && m.typingUntil <= this.time, dt);
+    const c = this.ceo;
+    this.#tickPhrase(c, CEO_ID, !c.bubble && this.time >= c.giveUntil && this.time >= c.cheerUntil && !this.envelopes.length, dt);
   }
 
   #walkTo(target) {

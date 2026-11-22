@@ -235,9 +235,16 @@ function frontFigure(put, look, s, role, back) {
   if (act === 'celebrate') {
     raisedArm(put, 'L', s, true);
     raisedArm(put, 'R', s, true);
+  } else if (act === 'stretch') {
+    // kedua tangan terentang ke atas dan keluar
+    put(1, 7 + s.bob, 2, 2, 's');
+    put(2, 9 + s.bob, 2, 3, 't');
+    put(2, 12 + s.bob, 2, 2, 't');
+    put(13, 7 + s.bob, 2, 2, 's');
+    put(12, 9 + s.bob, 2, 3, 't');
+    put(12, 12 + s.bob, 2, 2, 't');
   } else {
-    if (act === 'stress' || act === 'sip' || act === 'wave' || act === 'give') armFront(put, 'L', s, dyL);
-    else armFront(put, 'L', s, dyL);
+    armFront(put, 'L', s, dyL);
     if (act === 'sip') {
       put(12, 12 + s.bob, 2, 2, 't');
       put(11, 9 + s.bob, 3, 3, 't');
@@ -257,10 +264,45 @@ function frontFigure(put, look, s, role, back) {
       put(13, 8 + s.bob, 2, 2, 's');
       put(12, 6 + s.bob, 4, 3, 'n');
       put(12, 6 + s.bob, 4, 1, 'u');
+    } else if (act === 'bottle' || act === 'snack') {
+      put(12, 12 + s.bob, 2, 2, 't');
+      put(11, 9 + s.bob, 3, 3, 't');
+      put(10, 8 + s.bob, 2, 2, 's');
+      if (act === 'bottle') {
+        put(10, 5 + s.bob, 3, 3, 'q');
+        put(10, 5 + s.bob, 3, 1, 'w');
+      } else {
+        put(9, 6 + s.bob, 4, 2, 'd');
+        put(10, 6 + s.bob, 1, 1, 'n');
+      }
+    } else if (act === 'pour') {
+      put(12, 12 + s.bob, 2, 2, 't');
+      put(12, 9 + s.bob, 2, 3, 't');
+      put(11, 8 + s.bob, 2, 2, 's');
+      put(9, 5 + s.bob, 4, 3, 'q');
+      put(7, 4 + s.bob, 2, 1, 'q');
+      put(7, 6 + s.bob, 1, 1, 'z');
+    } else if (act === 'phone') {
+      put(12, 12 + s.bob, 2, 2, 't');
+      put(12, 9 + s.bob, 2, 3, 't');
+      put(12, hr + 4, 2, 2, 's');
+      put(13, hr + 2, 2, 4, 'k');
+    } else if (act === 'glasses') {
+      put(12, 12 + s.bob, 2, 2, 't');
+      put(11, 9 + s.bob, 2, 3, 't');
+      put(10, hr + 4, 2, 2, 's');
     } else armFront(put, 'R', s, dyR);
   }
   headFront(put, look, s, back);
   hijabFront(put, look, s, back);
+  if (s.phones) {
+    // headphones: pita di atas kepala dan dua bantalan telinga (statis; tetap tampil saat reduced motion)
+    put(4, hr - 1, 8, 1, 'k');
+    put(3, hr, 1, 3, 'k');
+    put(12, hr, 1, 3, 'k');
+    put(2, hr + 4, 2, 4, 'k');
+    put(12, hr + 4, 2, 4, 'k');
+  }
   if (look.style === 'long' && look.acc === 'none' && !back) {
     put(3, 12, 2, 4, 'h');
     put(11, 12, 2, 4, 'h');
@@ -332,11 +374,16 @@ function sideFigure(put, look, s, role) {
     put(5, hr + 7, 1, 1, 'm');
     if (look.glasses) put(5, hr + 4, 2, 1, 'g'), put(5, hr + 5, 1, 1, 'g'), put(7, hr + 5, 1, 1, 'g');
   }
+  if (s.phones) {
+    put(5, hr - 1, 6, 1, 'k');
+    put(8, hr + 4, 2, 4, 'k');
+  }
 }
 
 /**
  * Susun grid token sebuah figur.
- * spec: { dir, pose: 'stand'|'sit', frame: 0..3 (indeks WALK_FRAMES), act, mouth, blink }.
+ * spec: { dir, pose: 'stand'|'sit', frame: 0..3 (indeks WALK_FRAMES), act, mouth, blink, phones }.
+ * act: type|stress|sip|wave|give|celebrate (event nyata) dan bottle|snack|pour|stretch|phone|glasses (kebiasaan/quirk idle).
  */
 export function buildGrid(look, role, spec) {
   const walking = spec.pose === 'stand' && spec.moving;
@@ -352,6 +399,7 @@ export function buildGrid(look, role, spec) {
     act: spec.act ?? null,
     mouth: Boolean(spec.mouth),
     blink: Boolean(spec.blink),
+    phones: Boolean(spec.phones),
   };
   if (spec.act === 'type') {
     s.armL = spec.typeFrame ? 0 : 1;
@@ -397,7 +445,7 @@ export function createSpriteCache(createCanvas) {
     },
     clear: () => cache.clear(),
     get(look, role, shirt, outline, spec) {
-      const key = `${look.id}|${role}|${shirt}|${outline}|${spec.dir}|${spec.pose}|${spec.moving ? 1 : 0}|${spec.frame & 3}|${spec.act ?? ''}|${spec.typeFrame ? 1 : 0}|${spec.mouth ? 1 : 0}|${spec.blink ? 1 : 0}`;
+      const key = `${look.id}|${role}|${shirt}|${outline}|${spec.dir}|${spec.pose}|${spec.moving ? 1 : 0}|${spec.frame & 3}|${spec.act ?? ''}|${spec.typeFrame ? 1 : 0}|${spec.mouth ? 1 : 0}|${spec.blink ? 1 : 0}|${spec.phones ? 1 : 0}`;
       let c = cache.get(key);
       if (!c) {
         c = createCanvas();

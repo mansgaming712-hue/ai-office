@@ -153,12 +153,12 @@ function loadDivision(rootReal, name, taken) {
     agentFiles.push({ worker, fileName, path: join(agentsDir, fileName), text: r.text });
   }
   if (problems.length) return { errors: problems };
-  return { division: { ...value, source: 'plugin', agentFiles } };
+  return { division: { ...value, source: 'plugin', agentFiles }, warnings: v.warnings ? fromValidator(name, v.warnings) : [] };
 }
 
 /**
  * Temukan semua divisi plugin di `dir`.
- * Hasil: { divisions: [{ id, name, color, desks, workers, description?, source: 'plugin', agentFiles }], errors: [{ dir, key, params }] }
+ * Hasil: { divisions: [{ id, name, color, desks, workers, description?, personalities?, source: 'plugin', agentFiles }], errors: [{ dir, key, params }] }
  * `agentFiles` ([{ worker, fileName, path, text }]) hanya untuk skrip lokal; jangan dikirim lewat API.
  */
 export function discoverDivisions({ dir = divisionsDirFromEnv(), log = () => {} } = {}) {
@@ -209,6 +209,7 @@ export function discoverDivisions({ dir = divisionsDirFromEnv(), log = () => {} 
     }
     for (const w of r.division.workers) taken.set(w, r.division.id);
     divisions.push(r.division);
+    if (r.warnings?.length) note(r.warnings); // kepribadian yang diabaikan: divisi tetap dimuat
   }
   if (overflow) note([fail('.', 'divisions.err.tooManyFolders', { max: L.maxFolders })]);
   return { divisions, errors };
@@ -232,6 +233,7 @@ export function publicDivisions(result, tr = t) {
   return {
     divisions: result.divisions.map((d) => ({
       id: d.id, name: { en: d.name.en, id: d.name.id }, color: d.color, desks: d.desks, workers: [...d.workers], source: 'plugin',
+      ...(d.personalities ? { personalities: structuredClone(d.personalities) } : {}), // data tampilan saja
     })),
     errors: result.errors.map((e) => ({ dir: e.dir, message: tr(e.key, e.params) })),
   };

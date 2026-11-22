@@ -10,5 +10,26 @@
     "example-legal-reviewer",
     "example-legal-drafter"
   ],
-  "description": "Contoh divisi buatan pengguna untuk CONTRIBUTING. Bukan nasihat hukum."
+  "description": "Contoh divisi buatan pengguna untuk CONTRIBUTING. Bukan nasihat hukum.",
+  "personalities": {
+    "example-legal-reviewer": {
+      "nickname": { "en": "Lena", "id": "Lena" },
+      "traits": [{ "en": "thorough", "id": "teliti" }, { "en": "cautious", "id": "hati-hati" }],
+      "speech": {
+        "tone": "formal",
+        "phrases": [
+          { "en": "Let me read the fine print.", "id": "Saya baca pasal kecilnya dulu." },
+          { "en": "Noted, pending review.", "id": "Dicatat, menunggu tinjauan." }
+        ]
+      },
+      "idle": "water",
+      "quirk": "glasses"
+    },
+    "example-legal-drafter": {
+      "nickname": "Dito",
+      "speech": { "tone": "calm" },
+      "idle": "window",
+      "quirk": "pen-spin"
+    }
+  }
 }
