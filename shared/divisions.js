@@ -3,11 +3,15 @@
 //
 // Format divisions/<id>/division.json:
 //   { "id": "legal", "name": { "en": "Legal", "id": "Hukum" }, "color": "#8a5a44", "desks": 3,
-//     "workers": ["legal-reviewer", "legal-drafter"], "description": "opsional" }
+//     "workers": ["legal-reviewer", "legal-drafter"], "description": "opsional",
+//     "personalities": { "legal-reviewer": { "nickname": "Lena", ... } } }   // opsional, lihat shared/personalities.js
 //
 // validateDivision(obj) → { ok, value, errors }. Setiap error = { key, params }: `key` adalah kunci
 // namespace "cli" di locales/*.json (dipetakan ke teks lewat t(key, params)); `params` hanya berisi
 // teks yang sudah dibersihkan (tanpa karakter kontrol/bidi, dipotong pendek).
+// `personalities`: kunci wajib ada di `workers` (salah = divisi ditolak). Isi kepribadian yang tidak valid TIDAK menolak
+// divisi: kepribadian worker itu diabaikan dan dilaporkan di `warnings` (worker tetap tampil, tampilan netral).
+import { validatePersonality } from './personalities.js';
 import { AGENT_NAMES, CEO_ID, DIVISIONS, MANAGER_ID, OTHER_DIVISION } from './roster.js';
 
 export const DIVISION_LIMITS = Object.freeze({
@@ -25,7 +29,7 @@ export const DIVISION_LIMITS = Object.freeze({
 export const DIVISION_ID_RE = /^[a-z][a-z0-9-]{1,31}$/;
 export const WORKER_NAME_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
-export const DIVISION_FIELDS = Object.freeze(['id', 'name', 'color', 'desks', 'workers', 'description']);
+export const DIVISION_FIELDS = Object.freeze(['id', 'name', 'color', 'desks', 'workers', 'description', 'personalities']);
 
 /** id yang tidak boleh dipakai divisi plugin. */
 export const RESERVED_DIVISION_IDS = Object.freeze([...DIVISIONS.map((d) => d.id), OTHER_DIVISION.id, MANAGER_ID, CEO_ID]);
@@ -89,7 +93,8 @@ function checkName(raw) {
 
 /**
  * Validasi isi division.json (sudah di-JSON.parse). Tidak pernah melempar.
- * `value` hanya terisi bila ok; berisi salinan bersih { id, name: {en, id}, color, desks, workers, description? }.
+ * `value` hanya terisi bila ok; berisi salinan bersih { id, name: {en, id}, color, desks, workers, description?, personalities? }.
+ * Bila ada kepribadian yang diabaikan, hasil ok memuat juga `warnings` (bentuk sama dengan errors).
  */
 export function validateDivision(obj) {
   const L = DIVISION_LIMITS;
@@ -163,8 +168,29 @@ export function validateDivision(obj) {
     } else description = d;
   }
 
+  // personalities (opsional)
+  let personalities;
+  const warnings = [];
+  if (has('personalities')) {
+    if (!isPlainObject(obj.personalities)) errors.push(err('divisions.err.personalitiesInvalid'));
+    else {
+      const entries = [];
+      for (const [worker, raw] of Object.entries(obj.personalities)) {
+        if (!Array.isArray(obj.workers) || !obj.workers.includes(worker)) {
+          errors.push(err('divisions.err.personalityWorker', { worker: safeText(worker) }));
+          continue;
+        }
+        const r = validatePersonality(raw);
+        if (r.ok) entries.push([worker, r.value]);
+        else warnings.push(err('divisions.err.personalityIgnored', { worker, field: r.errors[0].params.field ?? '-', reason: r.errors[0].key }));
+      }
+      if (entries.length) personalities = Object.fromEntries(entries);
+    }
+  }
+
   if (errors.length) return { ok: false, value: null, errors };
   const value = { id, name, color, desks, workers };
   if (description !== undefined) value.description = description;
-  return { ok: true, value, errors: [] };
+  if (personalities) value.personalities = personalities;
+  return warnings.length ? { ok: true, value, errors: [], warnings } : { ok: true, value, errors: [] };
 }

@@ -111,6 +111,8 @@ export function planDivision({ name, from = null, divisionsDir = divisionsDirFro
       workers: starter.workers.map((w) => map.get(w)),
     };
     if (starter.description !== undefined) manifest.description = renameTokens(starter.description, map);
+    // Kepribadian (data tampilan) ikut disalin; kuncinya diganti ke nama worker baru, sama seperti `workers`.
+    if (starter.personalities) manifest.personalities = Object.fromEntries(Object.entries(starter.personalities).map(([w, p]) => [map.get(w), structuredClone(p)]));
     agents = starter.agentFiles.map((f) => ({ worker: map.get(f.worker), text: renameTokens(f.text, map) }));
   }
 

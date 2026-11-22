@@ -7,12 +7,14 @@ import { GLYPHS, GLYPH_SIZE, STATUS_INFO, uiStatusOf } from '../agentStatus.js';
 import { getState } from '../divisions.js';
 import { divisionName, getLang, t } from '../i18n.js';
 import { easeOutBack } from '../motion.js';
+import { personalityOf } from '../personality.js';
 import { characterName, deskLabel, lookFor, shirtOf, SKINS } from './characters.js';
 import { STATUS_LABEL } from './engine.js';
 import {
   DOOR, FOOT, MANAGER_SPOT, MEETING, PANTRY, H, W, WALL_ITEMS, zoneList,
 } from './layout.js';
 import { paletteFor } from './palette.js';
+import { QUIRKS, idleBehavior, idleSeatSeconds, quirkPhase } from './quirks.js';
 import { drawBackground, drawClock, drawSkyFx, drawSteam } from './scene.js';
 import { SIT_ROWS, SPR_H, SPR_W, createSpriteCache } from './sprites.js';
 import { CEO_ID, MANAGER_ID } from '../../shared/roster.js';
@@ -216,22 +218,34 @@ function drawEnvelope(ctx, env) {
   }
 }
 
+/** Hiasan quirk di kanvas piksel (note, pena, coretan, ...). Mati saat reduced motion (quirkPhase = -1). */
+function drawQuirkFx(ctx, kind, { x, headY, desk, time, seedMs, rm }) {
+  const q = kind ? QUIRKS[kind] : null;
+  if (!q?.draw || (q.needsDesk && !desk)) return;
+  const phase = quirkPhase(time, seedMs, rm);
+  if (phase < 0) return;
+  q.draw(ctx, { x, headY, desk, phase, time, ink: P.ink, soft: P.inkSoft });
+}
+
 // ------------------------------------------------------------------ pose karakter (dari state engine + event nyata)
 
 const walkFrame = (dist) => Math.floor(dist / 7);
 
 /** Spesifikasi pose pekerja: hanya berasal dari status/mode engine (event nyata), bukan acak. */
-function workerSpec(w, time, rm, seedMs) {
+export function workerSpec(w, time, rm, seedMs, pers = personalityOf(w.name)) {
   const speaking = !rm && w.bubble && w.bubble.until > time && Math.floor(time * 8) % 2 === 0;
+  const idle = idleBehavior(pers.idle);
+  const quirk = pers.quirk ? QUIRKS[pers.quirk] : null;
+  const phones = Boolean(quirk?.phones); // statis: tetap tampil saat reduced motion
   if (w.mode !== 'seat') {
     const moving = (w.mode === 'out' && w.rise <= 0) || w.mode === 'back';
-    const spec = { dir: w.facing, pose: 'stand', moving, frame: walkFrame(w.walkDist), mouth: speaking };
+    const spec = { dir: w.facing, pose: 'stand', moving, frame: walkFrame(w.walkDist), mouth: speaking, phones };
     if (w.mode === 'pantry' && w.stage === 'drink') {
-      spec.act = rm || Math.floor(time * 0.7) % 2 === 0 ? 'sip' : null;
+      spec.act = rm || Math.floor(time * 0.7) % 2 === 0 ? idle.pantry : null;
     }
     return spec;
   }
-  const spec = { dir: 'down', pose: 'sit', frame: 0, mouth: speaking };
+  const spec = { dir: 'down', pose: 'sit', frame: 0, mouth: speaking, phones };
   spec.blink = !rm && (time * 1000 + seedMs) % 4300 < 140;
   const age = time - (w.statusSince ?? -Infinity);
   if (w.status === 'working') {
@@ -241,25 +255,38 @@ function workerSpec(w, time, rm, seedMs) {
     spec.act = 'stress';
   } else if (w.status === 'done') {
     if (!rm && age >= 0 && age < 1.4) spec.act = 'celebrate';
-  } else if (!rm && (time + seedMs / 1000) % 11 < 1.6) {
-    spec.act = 'sip'; // ngopi di meja: hanya saat benar-benar idle
+  } else if (!rm && (time + seedMs / 1000) % 11 < idleSeatSeconds(idle)) {
+    // kebiasaan idle di meja (netral = ngopi): hanya saat benar-benar idle
+    if (idle.seat === 'turn') spec.dir = 'up';
+    else spec.act = idle.seat;
   }
   if (!rm && time < w.sendUntil) {
     spec.act = 'type';
     spec.typeFrame = Math.floor(time * 14) % 2 === 0;
   }
+  // quirk: hanya saat idle atau bekerja, bergantian dengan fase (mati saat reduced motion)
+  if (quirk && (w.status === 'idle' || w.status === 'working') && quirkPhase(time, seedMs, rm) >= 0) {
+    if (quirk.act && !spec.act && spec.dir === 'down') spec.act = quirk.act;
+    if (quirk.mouth) spec.mouth = true;
+  }
   return spec;
 }
 
-function managerSpec(m, office, time, rm) {
+function managerSpec(m, office, time, rm, pers = personalityOf(MANAGER_ID)) {
   const seated = m.state === 'sitting';
+  const quirk = pers.quirk ? QUIRKS[pers.quirk] : null;
+  const phones = Boolean(quirk?.phones);
+  const q = quirk && seated && m.typingUntil <= time && quirkPhase(time, 777, rm) >= 0;
   const speaking = !rm && office.managerBubble() && (m.state === 'talking' || office.managerBubble().kind !== 'warning') && Math.floor(time * 8) % 2 === 0;
   if (seated) {
     const typing = m.typingUntil > time;
-    return { dir: 'down', pose: 'sit', frame: 0, act: typing ? 'type' : null, typeFrame: !rm && typing && Math.floor(time * 8) % 2 === 0, mouth: speaking, blink: !rm && (time * 1000 + 777) % 4600 < 140 };
+    return {
+      dir: 'down', pose: 'sit', frame: 0, act: typing ? 'type' : q && quirk.act ? quirk.act : null, typeFrame: !rm && typing && Math.floor(time * 8) % 2 === 0,
+      mouth: speaking || Boolean(q && quirk.mouth), blink: !rm && (time * 1000 + 777) % 4600 < 140, phones,
+    };
   }
   const moving = m.state === 'walking';
-  const spec = { dir: m.facing, pose: 'stand', moving, frame: walkFrame(m.walkDist), mouth: speaking };
+  const spec = { dir: m.facing, pose: 'stand', moving, frame: walkFrame(m.walkDist), mouth: speaking, phones };
   if (m.state === 'talking' && !rm && Math.floor(time * 2.5) % 2 === 0) spec.act = 'wave';
   return spec;
 }
@@ -281,20 +308,26 @@ function wrapText(ctx, text, maxWidth, maxLines) {
   if (line) lines.push(line);
   if (lines.length > maxLines) {
     lines.length = maxLines;
-    let last = lines[maxLines - 1];
-    while (last.length > 1 && ctx.measureText(`${last}…`).width > maxWidth) last = last.slice(0, -1);
-    lines[maxLines - 1] = `${last}…`;
+    lines[maxLines - 1] = cutToFit(ctx, lines[maxLines - 1], maxWidth);
   }
   return lines;
+}
+
+/** Potong per code point (emoji tidak pecah menjadi surrogate tunggal) sampai `teks…` muat `maxWidth`. */
+function cutToFit(ctx, text, maxWidth) {
+  const chars = [...text];
+  while (chars.length > 1 && ctx.measureText(`${chars.join('')}…`).width > maxWidth) chars.pop();
+  return `${chars.join('')}…`;
 }
 
 /** Potong teks satu baris supaya muat `maxWidth` (diakhiri "…"). */
 function fitText(ctx, text, maxWidth) {
   if (ctx.measureText(text).width <= maxWidth) return text;
-  let s = text;
-  while (s.length > 1 && ctx.measureText(`${s}…`).width > maxWidth) s = s.slice(0, -1);
-  return `${s}…`;
+  return cutToFit(ctx, text, maxWidth);
 }
+
+/** Lebar maksimum label meja (px logis): jarak antarmeja terkecil (72) dikurangi celah, supaya tidak menimpa label tetangga. */
+export const DESK_LABEL_MAX_W = 68;
 
 function drawBubble(ctx, ax, ay, bubble, time, reduced) {
   const size = 8;
@@ -369,7 +402,7 @@ function drawLabels(ctx, office) {
     const by = w.desk.y + w.desk.h;
     ctx.font = `7px ${FONT}`;
     ctx.fillStyle = P.ink;
-    ctx.fillText(deskLabel(w.name), w.seat.x, by + 6);
+    ctx.fillText(fitText(ctx, deskLabel(w.name), DESK_LABEL_MAX_W), w.seat.x, by + 6);
     ctx.fillStyle = P.inkSoft;
     ctx.fillText(STATUS_LABEL[w.status], w.seat.x, by + 12);
   }
@@ -471,7 +504,10 @@ export function createRenderer(canvas, { theme = 'dark' } = {}) {
       const shirt = w.division.color;
       const seedMs = (hash(w.name) % 4000) + 1;
       const seated = w.mode === 'seat';
-      const spec = workerSpec(w, time, rm, seedMs);
+      const pers = personalityOf(w.name);
+      const spec = workerSpec(w, time, rm, seedMs, pers);
+      const quirkOn = seated && (w.status === 'idle' || w.status === 'working');
+      const tapping = quirkOn && !rm && Boolean(QUIRKS[pers.quirk]?.tap) && quirkPhase(time, seedMs, rm) >= 0;
       const skin = SKINS[look.skin % SKINS.length].s;
       const behind = !seated && Math.abs(w.x - w.seat.x) < 19 && w.y <= w.seat.y + 6;
       items.push({ y: w.seat.y - 0.1, draw: () => drawChair(pctx, w.seat.x, w.seat.y) });
@@ -481,13 +517,15 @@ export function createRenderer(canvas, { theme = 'dark' } = {}) {
           status: w.status, t: time + w.seat.x * 0.01, color: w.division.color, reduced: rm, seed: seedMs % 97,
           flash: !rm && time < w.sendUntil && Math.floor(time * 14) % 2 === 0,
         });
-        if (seated) drawHands(pctx, w.seat.x, w.desk.y, skin, time + w.seat.x, w.status === 'working' || time < w.sendUntil, rm);
+        if (seated) drawHands(pctx, w.seat.x, w.desk.y, skin, time + w.seat.x, w.status === 'working' || time < w.sendUntil || tapping, rm);
+        if (quirkOn) drawQuirkFx(pctx, pers.quirk, { x: w.seat.x, headY: w.seat.y - 17, desk: w.desk, time, seedMs, rm });
       } });
     }
     const m = office.manager;
     const mLook = lookFor(MANAGER_ID);
     const mSeated = m.state === 'sitting';
-    const mSpec = managerSpec(m, office, time, rm);
+    const mPers = personalityOf(MANAGER_ID);
+    const mSpec = managerSpec(m, office, time, rm, mPers);
     const mBehind = !mSeated && Math.abs(m.x - MANAGER_SPOT.seat.x) < 31 && m.y <= MANAGER_SPOT.seat.y + 6;
     items.push({ y: MANAGER_SPOT.seat.y - 0.5, draw: () => drawChair(pctx, MANAGER_SPOT.seat.x, MANAGER_SPOT.seat.y, true) });
     items.push({ y: mSeated || mBehind ? MANAGER_SPOT.seat.y : m.y + FOOT, draw: () => figure(mLook, 'manager', '#3a4256', mSpec, m.x, mSeated ? m.y : m.y + FOOT, mSeated) });
@@ -504,14 +542,19 @@ export function createRenderer(canvas, { theme = 'dark' } = {}) {
         rect(pctx, MANAGER_SPOT.inbox.x - 4, MANAGER_SPOT.inbox.y - 1 - i, 8, 1, i % 2 ? '#fff8e7' : '#e9dfc9');
       }
       if (mSeated) drawHands(pctx, m.x, MANAGER_SPOT.desk.y, SKINS[mLook.skin].s, time, office.manager.typingUntil > time, rm);
+      if (mSeated && office.manager.typingUntil <= time) drawQuirkFx(pctx, mPers.quirk, { x: m.x, headY: m.y - 17, desk: MANAGER_SPOT.desk, time, seedMs: 777, rm });
     } });
     // CEO: berdiri di dekat pintu
     const c = office.ceo;
     const cLook = lookFor(CEO_ID);
-    const cSpec = { dir: 'down', pose: 'stand', moving: false, frame: 0, mouth: !rm && Boolean(c.bubble) && Math.floor(time * 8) % 2 === 0 };
+    const cPers = personalityOf(CEO_ID);
+    const cSpec = { dir: 'down', pose: 'stand', moving: false, frame: 0, mouth: !rm && Boolean(c.bubble) && Math.floor(time * 8) % 2 === 0, phones: Boolean(QUIRKS[cPers.quirk]?.phones) };
     if (!rm && time < c.giveUntil) cSpec.act = 'give';
     else if (!rm && time < c.cheerUntil) cSpec.act = 'wave';
-    items.push({ y: c.y + FOOT, draw: () => figure(cLook, 'ceo', '#26304f', cSpec, c.x, c.y + FOOT, false) });
+    items.push({ y: c.y + FOOT, draw: () => {
+      figure(cLook, 'ceo', '#26304f', cSpec, c.x, c.y + FOOT, false);
+      if (!c.bubble && time >= c.giveUntil && time >= c.cheerUntil) drawQuirkFx(pctx, cPers.quirk, { x: c.x, headY: c.y + FOOT - 24, desk: null, time, seedMs: 1313, rm });
+    } });
     items.sort((a, b) => a.y - b.y);
     for (const it of items) it.draw();
 

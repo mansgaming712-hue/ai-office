@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { discoverDivisions } from '../server/divisions.js';
+import { validateDivision } from '../shared/divisions.js';
 import { addDivision, parseArgs, planDivision, renameTokens } from '../scripts/division-add.mjs';
 import { ROOT, cleanEnv, runNode } from './helpers/testkit.js';
 
@@ -130,6 +131,30 @@ describe('addDivision: --from <starter>', () => {
     expect(JSON.stringify(readFileSync(join(root, 'acme', 'division.json'), 'utf8'))).not.toContain(starter);
     expect(snapshot(PACKS)).toEqual(before); // starter tidak berubah
     expect(listFiles(join(root, 'acme', 'agents')).sort()).toEqual(d.workers.map((w) => `${w}.md`).sort());
+  });
+
+  it('example-legal: personalities ikut disalin dengan kunci diganti ke <nama>-..., dan hasilnya lolos validateDivision', () => {
+    const root = mkTmp();
+    const r = addDivision({ name: 'acme', from: 'example-legal', divisionsDir: root });
+    expect(r.ok, JSON.stringify(r)).toBe(true);
+    const manifest = JSON.parse(readFileSync(join(root, 'acme', 'division.json'), 'utf8'));
+    expect(manifest.workers).toEqual(['acme-reviewer', 'acme-drafter']);
+    expect(Object.keys(manifest.personalities).sort()).toEqual(['acme-drafter', 'acme-reviewer']);
+    for (const k of Object.keys(manifest.personalities)) expect(manifest.workers).toContain(k);
+    expect(JSON.stringify(manifest.personalities)).not.toContain('example-legal');
+    const starter = JSON.parse(readFileSync(join(PACKS, 'example-legal', 'division.json'), 'utf8'));
+    expect(manifest.personalities['acme-reviewer'].nickname).toEqual(starter.personalities['example-legal-reviewer'].nickname);
+    expect(manifest.personalities['acme-drafter'].idle).toBe('window');
+    const v = validateDivision(manifest);
+    expect(v.ok, JSON.stringify(v.errors)).toBe(true);
+    expect(v.warnings).toBeUndefined();
+    expect(Object.keys(v.value.personalities)).toHaveLength(2);
+    const found = discoverDivisions({ dir: root });
+    expect(found.errors).toEqual([]);
+    expect(Object.keys(found.divisions[0].personalities).sort()).toEqual(['acme-drafter', 'acme-reviewer']);
+    // starter tanpa personalities tidak mendapat kunci kosong
+    const dev = planDivision({ name: 'acme2', from: 'dev-team', divisionsDir: root });
+    expect(Object.hasOwn(JSON.parse(dev.files[0].text), 'personalities')).toBe(false);
   });
 
   it('dev-team: rujukan antarworker di isi agen ikut diganti, rujukan ke agen bawaan tidak', () => {

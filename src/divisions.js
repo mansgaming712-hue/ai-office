@@ -12,7 +12,7 @@ const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 /** Bentuk divisi untuk UI dari hasil validateDivision (validator tunggal: shared/divisions.js). */
 function toDivision(v) {
-  return { id: v.id, name: v.name.en, names: { en: v.name.en, id: v.name.id }, color: v.color, desks: v.desks, agents: v.workers, source: 'plugin' };
+  return { id: v.id, name: v.name.en, names: { en: v.name.en, id: v.name.id }, color: v.color, desks: v.desks, agents: v.workers, source: 'plugin', ...(v.personalities ? { personalities: v.personalities } : {}) };
 }
 
 /** Validasi satu entri (hanya lewat validateDivision server) → { ok, division } | { ok: false, reason }. */

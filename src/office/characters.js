@@ -3,7 +3,8 @@
 // jadi bisa dibedakan per bahasa; saat ini sama di EN dan ID. Semua desain dibuat sendiri.
 import { CEO_ID, MANAGER_ID } from '../../shared/roster.js';
 import { divisionOf } from '../divisions.js';
-import { hasKey, t } from '../i18n.js';
+import { getLang, hasKey, t } from '../i18n.js';
+import { nicknameOf, personalityOf } from '../personality.js';
 
 // Palet karakter terbatas (sama di kedua tema; hanya garis tepi yang mengikuti tema).
 export const SKINS = [
@@ -90,10 +91,14 @@ export function shirtOf(id) {
   return divisionOf(String(id)).color;
 }
 
-/** Nama orang untuk agen/peran (lewat t()); agen tamu memakai nama agennya apa adanya. */
+/**
+ * Nama orang untuk agen/peran: nama bawaan lewat t(); worker divisi plugin memakai nama panggilan dari
+ * kepribadiannya (teks biasa, dirender lewat fillText) bila ada; selain itu nama agennya apa adanya.
+ */
 export function characterName(id) {
   const key = `office.char.${id}`;
-  return hasKey(key) ? t(key) : String(id);
+  if (hasKey(key)) return t(key);
+  return nicknameOf(personalityOf(id), getLang()) || String(id);
 }
 
 /** Peran singkat dari nama agen: "dev-frontend" → "frontend", "3d-render" → "render". */
