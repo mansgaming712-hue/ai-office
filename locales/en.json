@@ -288,6 +288,8 @@
     "setup.next2": "  2. npm run open    (opens the dashboard in your browser with the runner key)",
     "setup.next3": "  3. Click the demo in the dashboard to see a sample task, or type a task for Claude Code to do.",
     "setup.nextNoClaude": "  Note: agents and hook are not installed (--no-claude). Run: npm run agents:install && npm run hooks:install-user",
+    "dev.ready": "Dev mode: UI at http://localhost:5173 (Vite), event server at http://127.0.0.1:{port}. Press Ctrl+C to stop both.",
+    "dev.exited": "Dev mode: {name} stopped unexpectedly ({reason}); shutting down.",
     "open.usage": "Usage: node scripts/open.mjs [--print] [--dry-run]\n  --print    print the dashboard URL (with the runner key) instead of opening the browser\n  --dry-run  show the browser-opening command without running it",
     "open.tokenMode": "Token mode detected (AI_OFFICE_TOKEN): the runner key is not used. Log in with the token on the dashboard page.",
     "open.keyFail": "Could not read or create the runner key ({reason}).",

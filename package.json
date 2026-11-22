@@ -20,6 +20,7 @@
     "prebuild": "node scripts/check-toolchain-node.mjs build",
     "build": "vite build",
     "prestart": "npm run build",
+    "dev": "node scripts/dev.mjs",
     "start": "node server/index.js",
     "serve": "node server/index.js",
     "setup": "node scripts/setup.mjs",

@@ -288,6 +288,8 @@
     "setup.next2": "  2. npm run open    (membuka dasbor di browser dengan runner key)",
     "setup.next3": "  3. Klik demo di dasbor untuk melihat contoh tugas, atau ketik tugas untuk dikerjakan Claude Code.",
     "setup.nextNoClaude": "  Catatan: agen dan hook belum dipasang (--no-claude). Jalankan: npm run agents:install && npm run hooks:install-user",
+    "dev.ready": "Mode dev: UI di http://localhost:5173 (Vite), server event di http://127.0.0.1:{port}. Tekan Ctrl+C untuk menghentikan keduanya.",
+    "dev.exited": "Mode dev: {name} berhenti tak terduga ({reason}); mematikan semuanya.",
     "open.usage": "Pemakaian: node scripts/open.mjs [--print] [--dry-run]\n  --print    cetak URL dasbor (dengan runner key) alih-alih membuka browser\n  --dry-run  tampilkan perintah pembuka browser tanpa menjalankannya",
     "open.tokenMode": "Mode token terdeteksi (AI_OFFICE_TOKEN): runner key tidak dipakai. Login dengan token di halaman dasbor.",
     "open.keyFail": "Gagal membaca atau membuat runner key ({reason}).",
