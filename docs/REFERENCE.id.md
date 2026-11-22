@@ -33,8 +33,8 @@ yang sudah ada), atau di bagian `env` pada pengaturan Claude Code untuk variabel
 | `AI_OFFICE_TOKEN` | kosong | Rahasia bersama. Mengaktifkan mode token. Dipakai lebih dulu bila diisi. |
 | `AI_OFFICE_TOKEN_FILE` | kosong | Path file berisi token (`~` = folder home). Dibaca hanya bila `AI_OFFICE_TOKEN` kosong. File yang bermasalah menampilkan peringatan, lalu server jalan seperti tanpa token. |
 | `AI_OFFICE_ALLOWED_HOSTS` | kosong | Nama host dipisah koma yang boleh muncul di header `Host` dan `Origin`. Jika diisi, mode terbuka dimulai. |
-| `AI_OFFICE_TRUST_PROXY` | kosong | Hanya bila `1`: pakai `X-Real-IP` dan `X-Forwarded-Proto` dari Nginx. Wajib `HOST` loopback. Dihitung sebagai mode terbuka. |
-| `AI_OFFICE_DEV_ORIGINS` | kosong | Origin dev server dipisah koma (misalnya `http://localhost:5173`) yang diizinkan di mode lokal. Dipakai saat mengembangkan UI dengan `npx vite`. |
+| `AI_OFFICE_TRUST_PROXY` | kosong | Hanya bila `1`: pakai `X-Real-IP` dan `X-Forwarded-Proto` dari Nginx. Wajib `HOST` loopback. Dihitung sebagai mode terbuka. Login butuh `X-Real-IP` yang valid (kalau tidak, `503`). |
+| `AI_OFFICE_DEV_ORIGINS` | kosong | Origin dev server dipisah koma (misalnya `http://localhost:5173`) yang diizinkan di mode lokal. Di mode lokal, `Origin` loopback hanya diterima untuk port server sendiri atau port dev Vite (5173). Dipakai saat mengembangkan UI dengan `npx vite`. |
 | `AI_OFFICE_LOG_MESSAGES` | kosong | Hanya bila `1`: isi pesan event ikut dicatat di log. Default: hanya metadata. |
 | `AI_OFFICE_CLAUDE_DIR` | `~/.claude` | Folder dasar log Claude Code untuk [panel Pemakaian Limit](#panel-pemakaian-limit). Bila tidak ada subfolder `projects/`, folder itu sendiri yang dipindai. |
 | `AI_OFFICE_LIMIT_CONFIG` | `limit-config.json` di root proyek | Path file konfigurasi limit. |
@@ -425,10 +425,11 @@ Server punya tiga mode.
      menganggap listener port 3000 milik akun lain (atau pemiliknya tidak terbaca) sebagai AI Office.
 2. **Mode token.** Aktif bila `AI_OFFICE_TOKEN` atau `AI_OFFICE_TOKEN_FILE` diisi.
    - Browser menampilkan layar token. Setelah token benar, server mengatur cookie `aio_session` (HttpOnly,
-     SameSite=Strict, dan `Secure` bila dilayani lewat HTTPS), berlaku 7 hari. Tombol **Keluar** hanya menghapus cookie di
-     browser itu. Mengganti token mengakhiri semua sesi.
+     SameSite=Strict, dan `Secure` bila dilayani lewat HTTPS atau di mode terbuka), berlaku 24 jam. Bentuk cookie:
+     `v2.<exp>.<sid>.<sig>` (id sesi acak yang ditandatangani). Tombol **Keluar** menghapus cookie dan mencabut id sesi itu
+     di memori server (hilang saat restart). Mengganti token mengakhiri semua sesi.
    - Hook dan curl mengirim header `Authorization: Bearer <token>`.
-   - Sepuluh kali gagal login dari satu alamat IP dalam jendela 15 menit memblokir alamat itu sampai jendela berakhir (`429`).
+   - Sepuluh kali gagal login dari satu alamat IP (IPv6: satu prefix /64) dalam jendela 15 menit memblokir alamat itu sampai jendela berakhir (`429`).
    - Token tidak pernah ditulis ke log, respons, atau URL.
    - Runner tidak memerlukan runner key di mode ini. Header Bearer atau cookie sesi sudah cukup.
 3. **Mode terbuka.** Terjadi bila `HOST` bukan alamat loopback, bila `AI_OFFICE_ALLOWED_HOSTS` diisi, atau bila

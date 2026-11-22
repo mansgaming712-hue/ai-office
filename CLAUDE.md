@@ -34,7 +34,8 @@ didelegasikan ke divisi 3D, bukan ke divisi Dev atau Konten. Urutan yang umum: `
 halaman web tetap tugas `dev-frontend`.
 
 Model tiap worker diatur di frontmatter: `haiku` untuk `3d-render`, `dev-docs`, `research-analyst`, dan
-`sonnet` untuk sisanya. Worker tidak boleh memakai model termahal.
+`sonnet` untuk sisanya. Worker tidak boleh memakai model termahal. Validator menerima alias `sonnet`, `haiku`,
+`opus`, `inherit`, `fable` atau ID model lengkap berpola `^claude-[a-z0-9.-]{3,60}$`; nilai lain ditolak.
 
 ## Aturan kerja manajer
 

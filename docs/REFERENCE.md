@@ -33,8 +33,8 @@ variables that already exist), or in the `env` section of Claude Code's settings
 | `AI_OFFICE_TOKEN` | empty | Shared secret. Enables token mode. Used first when set. |
 | `AI_OFFICE_TOKEN_FILE` | empty | Path to a file with the token (`~` = home folder). Read only when `AI_OFFICE_TOKEN` is empty. A bad file prints a warning and the server runs as if there were no token. |
 | `AI_OFFICE_ALLOWED_HOSTS` | empty | Comma-separated host names allowed in the `Host` and `Origin` headers. Setting it starts open mode. |
-| `AI_OFFICE_TRUST_PROXY` | empty | Only when `1`: use `X-Real-IP` and `X-Forwarded-Proto` from Nginx. Requires a loopback `HOST`. Counts as open mode. |
-| `AI_OFFICE_DEV_ORIGINS` | empty | Comma-separated dev server origins (for example `http://localhost:5173`) allowed in local mode. Used when developing the UI with `npx vite`. |
+| `AI_OFFICE_TRUST_PROXY` | empty | Only when `1`: use `X-Real-IP` and `X-Forwarded-Proto` from Nginx. Requires a loopback `HOST`. Counts as open mode. Login needs a valid `X-Real-IP` (otherwise `503`). |
+| `AI_OFFICE_DEV_ORIGINS` | empty | Comma-separated dev server origins (for example `http://localhost:5173`) allowed in local mode. In local mode a loopback `Origin` is accepted only for the server's own port or the Vite dev port (5173). Used when developing the UI with `npx vite`. |
 | `AI_OFFICE_LOG_MESSAGES` | empty | Only when `1`: event message text is also written to the log. Default: metadata only. |
 | `AI_OFFICE_CLAUDE_DIR` | `~/.claude` | Base folder of the Claude Code logs for the [Usage Limit panel](#usage-limit-panel). If it has no `projects/` subfolder, the folder itself is scanned. |
 | `AI_OFFICE_LIMIT_CONFIG` | `limit-config.json` in the project root | Path to the limit configuration file. |
@@ -426,10 +426,11 @@ The server has three modes.
      refuses to treat a port 3000 listener owned by another account (or with an unreadable owner) as AI Office.
 2. **Token mode.** Active when `AI_OFFICE_TOKEN` or `AI_OFFICE_TOKEN_FILE` is set.
    - The browser shows a token screen. After a correct token, the server sets the `aio_session` cookie (HttpOnly,
-     SameSite=Strict, and `Secure` when served over HTTPS), valid for 7 days. The **Log out** button only clears the
-     cookie in that browser. Changing the token ends all sessions.
+     SameSite=Strict, and `Secure` when served over HTTPS or in open mode), valid for 24 hours. The cookie has the form
+     `v2.<exp>.<sid>.<sig>` (random signed session id). **Log out** clears the cookie and revokes that session id in
+     server memory (lost on restart). Changing the token ends all sessions.
    - Hooks and curl send the header `Authorization: Bearer <token>`.
-   - Ten failed logins from one IP address within the 15-minute window block that address until the window ends (`429`).
+   - Ten failed logins from one IP address (IPv6: one /64 prefix) within the 15-minute window block that address until the window ends (`429`). With `AI_OFFICE_TRUST_PROXY=1`, a missing or invalid `X-Real-IP` makes login fail with `503` (proxy misconfiguration).
    - The token is never written to logs, responses, or URLs.
    - The runner needs no runner key in this mode. The Bearer header or the session cookie is enough.
 3. **Open mode.** Happens when `HOST` is not a loopback address, when `AI_OFFICE_ALLOWED_HOSTS` is set, or when

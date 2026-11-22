@@ -311,16 +311,16 @@ describe('discoverDivisions', () => {
     expect(JSON.stringify(r.errors)).not.toContain(root);
   });
 
-  it('agen divalidasi dengan validateAgent: name beda, model opus, aturan hilang', () => {
+  it('agen divalidasi dengan validateAgent: name beda, model tidak diizinkan, aturan hilang', () => {
     const root = mkTmp();
     makeDivision(root, 'm1', ['m1-a'], { agents: { 'm1-a': agentText('lain-nama') } });
-    makeDivision(root, 'm2', ['m2-a'], { agents: { 'm2-a': agentText('m2-a').replace(/^model: .*$/m, 'model: opus') } });
+    makeDivision(root, 'm2', ['m2-a'], { agents: { 'm2-a': agentText('m2-a').replace(/^model: .*$/m, 'model: gpt-4') } });
     makeDivision(root, 'm3', ['m3-a'], { agents: { 'm3-a': agentText('m3-a').replace('STATUS: SELESAI', 'x') } });
     const r = discover(root);
     expect(r.divisions).toEqual([]);
     expect(r.errors.map((e) => e.key)).toEqual(['divisions.err.agentInvalid', 'divisions.err.agentInvalid', 'divisions.err.agentInvalid']);
     expect(r.errors[0].params.detail).toMatch(/nama file/);
-    expect(r.errors[1].params.detail).toMatch(/opus/);
+    expect(r.errors[1].params.detail).toMatch(/gpt-4/);
   });
 
   it('worker yang bentrok dengan agen bawaan ditolak', () => {

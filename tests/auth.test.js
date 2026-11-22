@@ -13,7 +13,7 @@ import {
 } from './helpers/testkit.js';
 
 const EVENT = { type: 'done', from: 'dev-qa', to: 'manager', message: 'uji auth' };
-const COOKIE_RE = /^aio_session=v1\.(\d+)\.([A-Za-z0-9_-]+); HttpOnly; SameSite=Strict; Path=\/; Max-Age=604800$/;
+const COOKIE_RE = /^aio_session=v2\.(\d+)\.([A-Za-z0-9_-]{22})\.([A-Za-z0-9_-]+); HttpOnly; SameSite=Strict; Path=\/; Max-Age=86400$/;
 const setCookieOf = (res) => [].concat(res.headers['set-cookie'] ?? []);
 const postEvent = (port, headers = {}, body = EVENT) =>
   http(port, '/api/events', { method: 'POST', headers: { ...JSON_HEADERS, ...headers }, body });
@@ -27,8 +27,8 @@ const cookieIssuedAt = (token, ms) => {
 };
 
 describe('konstanta kontrak', () => {
-  it('nilai sesuai kontrak (7 hari, 32 karakter, 10 kegagalan per 15 menit)', () => {
-    expect(SESSION_MAX_AGE_S).toBe(604800);
+  it('nilai sesuai kontrak (24 jam, 32 karakter, 10 kegagalan per 15 menit)', () => {
+    expect(SESSION_MAX_AGE_S).toBe(86400);
     expect(MIN_OPEN_TOKEN_LENGTH).toBe(32);
     expect(LOGIN_MAX_FAILURES).toBe(10);
     expect(LOGIN_WINDOW_MS).toBe(15 * 60 * 1000);
@@ -172,7 +172,7 @@ describe('mode token: login, cookie, dan akses', () => {
     expect(r.json).toEqual({ ok: true, authRequired: true, authenticated: false });
   });
 
-  it('POST /api/login token benar → 200 + Set-Cookie dengan atribut lengkap, exp ≈ sekarang + 7 hari', async () => {
+  it('POST /api/login token benar → 200 + Set-Cookie dengan atribut lengkap, exp ≈ sekarang + 24 jam', async () => {
     const r = await login(s.port, TOKEN);
     expect(r.status).toBe(200);
     expect(r.json).toEqual({ ok: true });
@@ -182,7 +182,7 @@ describe('mode token: login, cookie, dan akses', () => {
     expect(m, sc[0]).not.toBeNull();
     expect(sc[0]).not.toMatch(/Secure/);
     const exp = Number(m[1]);
-    const expected = Math.floor(Date.now() / 1000) + 604800;
+    const expected = Math.floor(Date.now() / 1000) + 86400;
     expect(Math.abs(exp - expected)).toBeLessThanOrEqual(5);
     expect(sc[0]).not.toContain(TOKEN);
     expect(r.body).not.toContain(TOKEN);
@@ -206,7 +206,7 @@ describe('mode token: login, cookie, dan akses', () => {
   });
 
   it('cookie sah membuka /api/events (GET dan POST), /api/session, dan WebSocket', async () => {
-    expect(cookie).toMatch(/^aio_session=v1\./);
+    expect(cookie).toMatch(/^aio_session=v2\./);
     expect((await http(s.port, '/api/events', { headers: { Cookie: cookie } })).status).toBe(200);
     expect((await postEvent(s.port, { Cookie: cookie })).status).toBe(202);
     expect((await http(s.port, '/api/session', { headers: { Cookie: cookie } })).json).toEqual({ ok: true, authRequired: true, authenticated: true });
@@ -254,16 +254,17 @@ describe('mode token: login, cookie, dan akses', () => {
   });
 
   it('cookie palsu atau rusak ditolak: tanda tangan acak, exp diubah, versi lain, nama lain, terlalu panjang', async () => {
-    const [, exp, sig] = /^aio_session=v1\.(\d+)\.(.+)$/.exec(cookie);
+    const [, exp, sid, sig] = /^aio_session=v2\.(\d+)\.([^.]+)\.(.+)$/.exec(cookie);
     const fakes = [
-      `aio_session=v1.${exp}.${'A'.repeat(sig.length)}`,
-      `aio_session=v1.${Number(exp) - 1}.${sig}`,
-      `aio_session=v2.${exp}.${sig}`,
-      `aio_session=v1.${exp}`,
-      `aio_session=v1.${exp}.${sig}.x`,
-      `aio_session=v1.-5.${sig}`,
-      `aio_session2=v1.${exp}.${sig}`,
-      `aio_session=v1.${exp}.${sig}${'A'.repeat(200)}`,
+      `aio_session=v2.${exp}.${sid}.${'A'.repeat(sig.length)}`,
+      `aio_session=v2.${Number(exp) - 1}.${sid}.${sig}`,
+      `aio_session=v3.${exp}.${sid}.${sig}`,
+      `aio_session=v1.${exp}.${sig}`,
+      `aio_session=v2.${exp}.${sid}`,
+      `aio_session=v2.${exp}.${sid}.${sig}.x`,
+      `aio_session=v2.-5.${sid}.${sig}`,
+      `aio_session2=v2.${exp}.${sid}.${sig}`,
+      `aio_session=v2.${exp}.${sid}.${sig}${'A'.repeat(200)}`,
       'aio_session=',
     ];
     for (const c of fakes) {
@@ -277,8 +278,8 @@ describe('mode token: login, cookie, dan akses', () => {
   it('cookie kedaluwarsa atau exp terlalu jauh di masa depan ditolak (jam digeser lewat injeksi now)', async () => {
     const now = Date.now();
     const expired = cookieIssuedAt(TOKEN, now - (SESSION_MAX_AGE_S + 10) * 1000);
-    const future = cookieIssuedAt(TOKEN, now + 2 * 60 * 60 * 1000); // exp = sekarang + 7 hari + 2 jam
-    const valid = cookieIssuedAt(TOKEN, now - 24 * 60 * 60 * 1000); // sisa 6 hari
+    const future = cookieIssuedAt(TOKEN, now + 2 * 60 * 60 * 1000); // exp = sekarang + 24 jam + 2 jam
+    const valid = cookieIssuedAt(TOKEN, now - 60 * 60 * 1000); // sisa 23 jam
     expect((await http(s.port, '/api/events', { headers: { Cookie: expired } })).status).toBe(401);
     expect((await http(s.port, '/api/events', { headers: { Cookie: future } })).status).toBe(401);
     expect((await http(s.port, '/api/events', { headers: { Cookie: valid } })).status).toBe(200);
@@ -440,17 +441,17 @@ describe('waktu: kedaluwarsa sesi dan jendela rate limit (Date dipalsukan)', () 
   const T0 = new Date('2026-11-08T00:00:00Z').getTime();
   afterEach(() => vi.useRealTimers());
 
-  it('cookie sah sampai 7 hari, ditolak tepat saat exp', async () => {
+  it('cookie sah sampai 24 jam, ditolak tepat saat exp', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(T0);
     const T = randomToken();
     const s = await startApp({ token: T });
     try {
       const cookie = cookieFrom(await login(s.port, T));
-      expect(cookie).toBe(`aio_session=v1.${T0 / 1000 + 604800}.${cookie.split('.')[2]}`);
-      vi.setSystemTime(T0 + (604800 - 1) * 1000);
+      expect(cookie).toMatch(new RegExp(`^aio_session=v2\\.${T0 / 1000 + 86400}\\.[A-Za-z0-9_-]{22}\\.[A-Za-z0-9_-]+$`));
+      vi.setSystemTime(T0 + (86400 - 1) * 1000);
       expect((await http(s.port, '/api/events', { headers: { Cookie: cookie } })).status).toBe(200);
-      vi.setSystemTime(T0 + 604800 * 1000);
+      vi.setSystemTime(T0 + 86400 * 1000);
       expect((await http(s.port, '/api/events', { headers: { Cookie: cookie } })).status).toBe(401);
       expect((await http(s.port, '/api/session', { headers: { Cookie: cookie } })).json.authenticated).toBe(false);
       expect((await wsConnect(s.port, { headers: { Cookie: cookie } })).status).toBe(401);
@@ -491,7 +492,7 @@ describe('waktu: kedaluwarsa sesi dan jendela rate limit (Date dipalsukan)', () 
       const viaBearer = await wsConnect(s.port, { headers: bearer(T) });
       expect([viaCookie.status, viaBearer.status]).toEqual([101, 101]);
       const closed = wsClosed(viaCookie.ws);
-      vi.setSystemTime(T0 + 604800 * 1000);
+      vi.setSystemTime(T0 + 86400 * 1000);
       vi.advanceTimersByTime(30000); // satu detak heartbeat
       expect(await closed).toEqual({ code: 4401, reason: 'Sesi kedaluwarsa' });
       expect(viaBearer.ws.readyState).toBe(1);
@@ -514,18 +515,18 @@ describe('trustProxy: X-Real-IP dan X-Forwarded-Proto', () => {
       expect((await wrongLogin(s.port, { 'X-Real-IP': '203.0.113.7, 198.51.100.1' })).status).toBe(429); // nilai pertama
       expect((await wrongLogin(s.port, { ...A, 'X-Forwarded-For': '198.51.100.9' })).status).toBe(429); // XFF tidak dipakai
       expect((await wrongLogin(s.port, { 'X-Real-IP': '203.0.113.8' })).status).toBe(401);
-      expect((await wrongLogin(s.port)).status).toBe(401); // tanpa header → IP soket
+      expect((await wrongLogin(s.port)).status).toBe(503); // tanpa X-Real-IP: tidak jatuh ke IP soket
       expect(s.logs.some((l) => l.includes('login gagal dari 203.0.113.7'))).toBe(true);
     } finally {
       await s.close();
     }
   });
 
-  it('dengan trustProxy: X-Real-IP tidak valid → pakai IP soket', async () => {
+  it('dengan trustProxy: X-Real-IP tidak valid → 503 (tanpa fallback ke IP soket, tidak dihitung ke rate limit)', async () => {
     const s = await startApp({ token: randomToken(), trustProxy: true });
     try {
-      for (let i = 0; i < 10; i++) await wrongLogin(s.port, { 'X-Real-IP': 'bukan-ip' });
-      expect((await wrongLogin(s.port)).status).toBe(429);
+      for (let i = 0; i < 12; i++) expect((await wrongLogin(s.port, { 'X-Real-IP': 'bukan-ip' })).status).toBe(503);
+      expect((await wrongLogin(s.port, { 'X-Real-IP': '203.0.113.50' })).status).toBe(401);
     } finally {
       await s.close();
     }
@@ -543,17 +544,17 @@ describe('trustProxy: X-Real-IP dan X-Forwarded-Proto', () => {
     }
   });
 
-  it('Secure hanya bila trustProxy + X-Forwarded-Proto: https (login dan logout)', async () => {
+  it('Secure: selalu di mode terbuka (trustProxy), tidak di mode lokal walau ada X-Forwarded-Proto (login dan logout)', async () => {
     const T = randomToken();
     const proxied = await startApp({ token: T, trustProxy: true });
     const direct = await startApp({ token: T });
-    const https = { 'X-Forwarded-Proto': 'https' };
+    const https = { 'X-Forwarded-Proto': 'https', 'X-Real-IP': '203.0.113.20' };
     try {
       const sc = (r) => setCookieOf(r)[0];
       expect(sc(await login(proxied.port, T, https))).toMatch(/; Secure$/);
-      expect(sc(await login(proxied.port, T, { 'X-Forwarded-Proto': 'HTTPS, http' }))).toMatch(/; Secure$/);
-      expect(sc(await login(proxied.port, T, { 'X-Forwarded-Proto': 'http' }))).not.toMatch(/Secure/);
-      expect(sc(await login(proxied.port, T))).not.toMatch(/Secure/);
+      expect(sc(await login(proxied.port, T, { 'X-Forwarded-Proto': 'HTTPS, http', 'X-Real-IP': '203.0.113.20' }))).toMatch(/; Secure$/);
+      expect(sc(await login(proxied.port, T, { 'X-Forwarded-Proto': 'http', 'X-Real-IP': '203.0.113.20' }))).toMatch(/; Secure$/);
+      expect(sc(await login(proxied.port, T, { 'X-Real-IP': '203.0.113.20' }))).toMatch(/; Secure$/);
       expect(sc(await login(direct.port, T, https))).not.toMatch(/Secure/);
       const out = await http(proxied.port, '/api/logout', { method: 'POST', headers: { ...JSON_HEADERS, ...https }, body: '{}' });
       expect(sc(out)).toBe('aio_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0; Secure');
@@ -572,7 +573,7 @@ describe('trustProxy: X-Real-IP dan X-Forwarded-Proto', () => {
     const T = randomToken();
     const s = await startApp({ token: T, trustProxy: true, allowedHosts: ['office.example.com'] });
     try {
-      const pub = { Host: 'office.example.com', Origin: 'https://office.example.com', 'X-Forwarded-Proto': 'https' };
+      const pub = { Host: 'office.example.com', Origin: 'https://office.example.com', 'X-Forwarded-Proto': 'https', 'X-Real-IP': '203.0.113.21' };
       expect((await login(s.port, T, pub)).status).toBe(200);
       expect((await http(s.port, '/api/session', { headers: { Host: 'evil.example' } })).status).toBe(403);
       expect((await http(s.port, '/api/session', { headers: { Host: 'office.example.com', Origin: 'https://evil.example' } })).status).toBe(403);
@@ -591,13 +592,13 @@ describe('server/auth.js (unit, jam diinjeksi)', () => {
     expect(safeEqual('', '')).toBe(true);
   });
 
-  it('createAuth: cookie dari jam X sah sampai X + 7 hari', () => {
+  it('createAuth: cookie dari jam X sah sampai X + 24 jam', () => {
     let t = 1_000_000_000_000;
     const auth = createAuth({ token: 'rahasia', now: () => t });
     const v = auth.sessionCookie({ headers: {}, socket: {} }).split(';')[0];
     const req = { headers: { cookie: v }, socket: {} };
-    expect(auth.check(req)).toEqual({ ok: true, expiresAtMs: (Math.floor(t / 1000) + 604800) * 1000 });
-    t += 604800 * 1000 - 1000;
+    expect(auth.check(req)).toEqual({ ok: true, expiresAtMs: (Math.floor(t / 1000) + 86400) * 1000 });
+    t += 86400 * 1000 - 1000;
     expect(auth.check(req).ok).toBe(true);
     t += 1000;
     expect(auth.check(req).ok).toBe(false);

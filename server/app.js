@@ -34,9 +34,9 @@
 //   allowedHosts terisi → hanya host di daftar itu, plus loopback bila server mendengar di loopback
 //   tanpa allowedHosts  → loopback saja bila mendengar di loopback; host apa pun bila tidak
 // Header Origin (browser dari situs lain tidak boleh membaca atau mengirim event):
-//   mode lokal / token di loopback → Origin harus sama dengan header Host (host + port; localhost dan
-//                                     127.0.0.1 di port yang sama setara). Origin dev server (Vite 5173)
-//                                     hanya lewat opsi devOrigins (env AI_OFFICE_DEV_ORIGINS)
+//   mode lokal / token di loopback → hanya Origin loopback (http/https) dengan port soket server sendiri atau
+//                                     port di opsi devPorts (bawaan [5173], Vite), plus origin di devOrigins
+//                                     (env AI_OFFICE_DEV_ORIGINS). Origin "null" / skema lain ditolak.
 //   mode terbuka                    → Origin harus sama persis (skema + host + port) dengan alamat yang
 //                                     dibuka browser, dan hostname-nya harus host yang diizinkan
 // Log: default hanya metadata event ("[event] type from → to (N karakter)"). Isi pesan ikut dicatat
@@ -82,6 +82,7 @@ export function createAiOfficeServer({
   logMessages = false,
   dedupWindowMs = 3000,
   devOrigins: devOriginList = [],
+  devPorts = [5173], // port dev server Vite (vite.config.js); Origin loopback di port ini diterima di mode lokal
   usage = null,
   runnerKey = null,
   runnerEnabled = false,
@@ -93,8 +94,9 @@ export function createAiOfficeServer({
   // begitu juga trustProxy dengan host bukan loopback.
   const mode = resolveAuthMode({ host, allowedHosts, trustProxy, token });
   if (mode.error) throw new Error(mode.error);
-  const auth = createAuth({ token: mode.token, trustProxy });
+  const auth = createAuth({ token: mode.token, trustProxy, open: mode.open });
   const limiter = createLoginLimiter();
+  let warnedNoClientIp = false;
 
   const history = [];
   let nextId = 1;
@@ -111,6 +113,8 @@ export function createAiOfficeServer({
       // entri tidak sah diabaikan
     }
   }
+
+  const devPortSet = new Set(devPorts.map((p) => String(Number(p))));
 
   // Hostname dari header Host yang lolos validasi ketat (parseHostHeader), atau '' bila tidak sah.
   // Parser URL yang longgar (hostnameOf) tidak dipakai di sini: ia menerima "evil@office.example.com"
@@ -158,15 +162,13 @@ export function createAiOfficeServer({
       }
       if (o.protocol !== 'http:' && o.protocol !== 'https:') return false;
       if (devOrigins.has(o.origin)) return true;
-      const h = parseHostHeader(req.headers.host);
-      if (!h) return false;
-      const name = o.hostname.replace(/^\[|\]$/g, '').toLowerCase();
-      const sameHost = name === h.hostname || (isLoopbackHost(name) && isLoopbackHost(h.hostname));
+      // Hanya Origin loopback (hostname hasil `new URL`: userinfo "localhost:5173@evil" sudah dibuang) dengan
+      // port soket server sendiri atau port dev server (devPorts). Port loopback lain ditolak.
+      if (!isLoopbackHost(o.hostname.replace(/^\[|\]$/g, ''))) return false;
       const scheme = auth.requestScheme(req); // null = tidak diketahui (di belakang proxy tanpa X-Forwarded-Proto)
       if (scheme && o.protocol !== `${scheme}:`) return false;
       const originPort = o.port || (o.protocol === 'https:' ? '443' : '80');
-      const hostPort = h.port || (o.protocol === 'https:' ? '443' : '80');
-      return sameHost && originPort === hostPort;
+      return originPort === String(req.socket?.localPort) || devPortSet.has(originPort);
     }
     // Mode terbuka: Origin loopback tidak otomatis diizinkan.
     let o;
@@ -350,6 +352,15 @@ export function createAiOfficeServer({
     // Cek batas, bandingkan, dan catat kegagalan dalam satu blok sinkron, supaya request paralel
     // tidak bisa melewati batas 10 percobaan.
     const ip = auth.clientIp(req);
+    if (ip === null) {
+      // trustProxy aktif tetapi proxy tidak mengirim X-Real-IP yang sah: salah konfigurasi. Jangan
+      // jatuh ke IP soket (semua klien jadi satu kunci, satu penyerang mengunci semua pengguna).
+      if (!warnedNoClientIp) {
+        warnedNoClientIp = true;
+        log(t('auth.noClientIpLog'));
+      }
+      return send(res, 503, { ok: false, error: t('auth.noClientIp') });
+    }
     const gate = limiter.check(ip);
     if (!gate.allowed) {
       return send(res, 429, { ok: false, error: 'Terlalu banyak percobaan. Coba lagi nanti.' }, { 'Retry-After': String(gate.retryAfterS) });
@@ -372,6 +383,7 @@ export function createAiOfficeServer({
     } catch (e) {
       return sendError(res, e);
     }
+    auth.revoke(req); // cabut sesi di sisi server (hanya cookie bertanda tangan sah)
     return send(res, 200, { ok: true }, { 'Set-Cookie': auth.clearCookie(req) });
   }
 

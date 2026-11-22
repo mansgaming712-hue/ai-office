@@ -10,16 +10,27 @@
 // Yang ditulis adalah teks yang sudah dibaca (dan, untuk plugin, divalidasi), bukan salinan file dari disk.
 import '../server/requireNode.js'; // paling awal: cek versi Node (minimal 22.12)
 import { t } from '../shared/i18n.js';
-import { mkdirSync, readFileSync, existsSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, lstatSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { discoverDivisions, divisionsDirFromEnv, pluginAgentFiles } from '../server/divisions.js';
 import {
-  REPO_AGENTS_DIR, RISKY_EXIT_CODE, USER_AGENTS_DIR, classifyAgent, readAgentDir, readInstallManifestFull, sha256,
+  REPO_AGENTS_DIR, RISKY_EXIT_CODE, USER_AGENTS_DIR, classifyAgent, readInstallManifestFull, sha256, checkAgentSet,
   writeInstallManifest,
 } from './agent-files.mjs';
 
 const force = process.argv.includes('--force');
 const allowRisky = process.argv.includes('--allow-risky-tools');
+
+// Agen repo divalidasi SEMUA dulu, sebelum menulis apa pun (termasuk membuat folder tujuan). --force dan
+// --allow-risky-tools tidak melewati ini. Gagal = exit 1 (beda dari RISKY_EXIT_CODE).
+const repoSet = checkAgentSet(REPO_AGENTS_DIR);
+if (!repoSet.ok) {
+  console.log(t('agents.invalid.header', { dir: REPO_AGENTS_DIR }));
+  for (const e of repoSet.errors) console.log(t('agents.invalid.row', { file: e.fileName, error: e.error }));
+  console.log(t('agents.invalid.aborted'));
+  process.exit(1);
+}
+
 mkdirSync(USER_AGENTS_DIR, { recursive: true });
 const { files: manifest, approvedRisky } = readInstallManifestFull(USER_AGENTS_DIR);
 let copied = 0, same = 0, skipped = 0, riskySkipped = 0, unverifiable = 0;
@@ -27,7 +38,11 @@ let copied = 0, same = 0, skipped = 0, riskySkipped = 0, unverifiable = 0;
 function install(f) {
   const dest = join(USER_AGENTS_DIR, f.fileName);
   const hash = sha256(f.text);
-  if (existsSync(dest)) {
+  let st = null;
+  try { st = lstatSync(dest); } catch { /* belum ada */ }
+  // Tujuan symlink atau direktori tidak pernah diikuti atau ditimpa (juga dengan --force).
+  if (st && !st.isFile()) { skipped++; console.log(t('agents.skipLink', { dest })); return 'skipped'; }
+  if (st) {
     const cur = readFileSync(dest, 'utf8');
     if (cur === f.text) { same++; manifest[f.fileName] ??= hash; return 'same'; }
     if (!force) { skipped++; console.log(t('agents.skip', { dest })); return 'skipped'; }
@@ -47,7 +62,7 @@ function install(f) {
   return 'copied';
 }
 
-for (const f of readAgentDir(REPO_AGENTS_DIR)) install(f);
+for (const f of repoSet.files) install(f);
 
 // Agen divisi plugin: hanya dari divisi yang lolos validasi (nama worker sudah dijamin kebab-case dan tidak bentrok).
 const plugin = discoverDivisions({ dir: divisionsDirFromEnv(process.env) });
