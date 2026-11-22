@@ -272,7 +272,7 @@ by the server. The response is still `202`, with a `duplicates` count.
 | `POST /api/events` | One event or an array of up to 50. Requires `Content-Type: application/json`. Returns `202 { ok, accepted, ids }`. | Bearer header or session cookie, otherwise `401` |
 | `GET /api/events` | The last 300 events. | Bearer header or session cookie, otherwise `401` |
 | `GET /api/usage` | `{ ok, usage }`: token usage statistics (local estimate). | Bearer header or session cookie, otherwise `401` |
-| `GET /api/divisions` | `{ ok, divisions, errors }`: plugin divisions found at server start (`id`, `name`, `color`, `desks`, `workers`, `source`). `errors` lists skipped folders as plain text. No file paths or agent text. | Bearer header or session cookie, otherwise `401` |
+| `GET /api/divisions` | `{ ok, divisions, errors }`: plugin divisions found at server start (`id`, `name`, `color`, `desks`, `workers`, `source`, and `personalities` when present). `errors` lists skipped folders and ignored personalities as plain text. No file paths or agent text. | Bearer header or session cookie, otherwise `401` |
 | `GET /api/health` | `{ ok: true }`. In local mode it also returns `clients` and `events` counts. | open |
 | `GET /api/session` | `{ ok, authRequired, authenticated }`. | open |
 | `POST /api/login` | Body `{"token":"..."}`. Sets the `aio_session` cookie. Wrong token: `401`. Too many tries: `429`. | open (local mode always returns `{ ok: true }`) |
@@ -563,6 +563,59 @@ npm run agents:install -- --allow-risky-tools --force   # also updates an approv
 npm run agents:install -- --force                       # overwrites only unchanged files that AI Office installed
 npm run agents:validate                                 # checks frontmatter, tools, and rule phrases; labels risky workers
 ```
+
+## Worker personalities
+
+Personalities are optional display data in a division's `division.json`. The file rules and limits are in
+[CONTRIBUTING.md](../CONTRIBUTING.md#worker-personalities). This section describes what the server returns and what the
+dashboard does with it.
+
+- **Scope.** A personality changes only how a worker looks on the dashboard: nickname, speech bubble, idle habit, and quirk.
+  It never enters agent prompts, agent files, task templates, runner arguments, or hooks (`tests/personalityNoLeak.test.js`).
+- **`GET /api/divisions`.** A plugin division with valid personalities has a `personalities` object, keyed by worker name,
+  with the cleaned values. Every text is `{ "en", "id" }`. A division without personalities has no `personalities` key.
+  An ignored personality is listed in `errors` as `{ dir, message }`, where `dir` is the folder name, and the division is
+  still listed. The built-in characters are not part of this response. The dashboard uses its own defaults for them
+  (`shared/personalities.js`).
+- **Neutral default.** A worker without a valid personality has no nickname, no phrases, no tone, no quirk, and the idle
+  habit `coffee`.
+- **Reduced motion.** With `prefers-reduced-motion: reduce`, idle walks and idle habit animations are off, the moving quirks
+  do not run, and the `headphones` quirk stays.
+
+The same identifiers are used in every language. Only the descriptions below are translated.
+
+| Field | Identifiers |
+| --- | --- |
+| `speech.tone` | `formal`, `casual`, `cheerful`, `calm`, `dry` |
+| `idle` | `coffee`, `stretch`, `phone`, `water`, `snack`, `plant`, `window`, `chat` |
+| `quirk` | `hum`, `pen-spin`, `desk-tap`, `yawn`, `glasses`, `headphones`, `plant-talk`, `doodle` |
+
+Idle habits. "Walks to pantry" means the worker also goes to the pantry during idle time; the others stay at the desk.
+
+| Identifier | Behaviour |
+| --- | --- |
+| `coffee` | Sips from a cup. Walks to the pantry. |
+| `water` | Drinks from a bottle. Walks to the pantry. |
+| `snack` | Eats a snack. Walks to the pantry. |
+| `plant` | Waters a plant. Walks to the pantry. |
+| `chat` | Waves. Walks to the pantry. |
+| `stretch` | Stretches at the desk. |
+| `phone` | Looks at a phone at the desk. |
+| `window` | Turns to face the window. |
+
+Quirks. A quirk is shown only while the worker is idle or working. Quirks marked "needs a desk" are drawn only for a
+character that has a desk.
+
+| Identifier | Drawing |
+| --- | --- |
+| `hum` | Small notes above the head. |
+| `pen-spin` | A red pen spins on the desk. Needs a desk. |
+| `desk-tap` | A hand taps the desk. Needs a desk. |
+| `yawn` | A yawn above the head. |
+| `glasses` | Glasses pose. |
+| `headphones` | Headphones on the sprite. Static, so it stays with reduced motion. |
+| `plant-talk` | Small green marks by the plant. Needs a desk. |
+| `doodle` | A small doodle on the desk. Needs a desk. |
 
 ## Tests and checks
 

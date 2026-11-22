@@ -19,6 +19,7 @@ dan versi Inggris ada di [bagian English](README.md#english).
 - **Mode lokal atau token**, tema terang dan gelap, antarmuka Bahasa Indonesia dan Inggris.
 - **Autostart** di Windows, macOS, dan Linux (opsional).
 - **Divisi buatan pengguna:** tambahkan divisi sebagai data biasa (JSON dan Markdown), dari kerangka kosong atau starter pack. Maksimal 12 divisi. Lihat [Divisi buatan pengguna](#divisi-buatan-pengguna).
+- **Kepribadian worker:** setiap worker bisa punya nama panggilan, gaya bicara dengan frasa di balon ucapan, kebiasaan idle, dan quirk kecil. Ini hanya untuk tampilan dasbor dan tidak pernah masuk ke prompt agen. Lihat [Kepribadian worker](docs/REFERENCE.id.md#kepribadian-worker).
 
 ### Mulai cepat
 

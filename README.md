@@ -25,6 +25,7 @@ Kantor pixel-art tempat manajer Claude Code dan 17 agen spesialisnya bekerja, te
 - **Local or token mode**, light and dark theme, English and Bahasa Indonesia interface.
 - **Autostart** on Windows, macOS, and Linux (optional).
 - **Your own divisions:** add a division as plain data (JSON and Markdown), from a skeleton or a starter pack. Up to 12 divisions. See [Custom divisions](#custom-divisions).
+- **Worker personalities:** each worker can have a nickname, a speech tone with phrases in its speech bubble, an idle habit, and a small quirk. These are for the dashboard only and never reach agent prompts. See [Worker personalities](docs/REFERENCE.md#worker-personalities).
 
 ### Quick start
 
@@ -185,6 +186,7 @@ AI Office is released under the MIT License. See [LICENSE](LICENSE).
 - **Mode lokal atau token**, tema terang dan gelap, antarmuka Bahasa Indonesia dan Inggris.
 - **Autostart** di Windows, macOS, dan Linux (opsional).
 - **Divisi buatan pengguna:** tambahkan divisi sebagai data biasa (JSON dan Markdown), dari kerangka kosong atau starter pack. Maksimal 12 divisi. Lihat [Divisi buatan pengguna](#divisi-buatan-pengguna).
+- **Kepribadian worker:** setiap worker bisa punya nama panggilan, gaya bicara dengan frasa di balon ucapan, kebiasaan idle, dan quirk kecil. Ini hanya untuk tampilan dasbor dan tidak pernah masuk ke prompt agen. Lihat [Kepribadian worker](docs/REFERENCE.id.md#kepribadian-worker).
 
 ### Mulai cepat
 

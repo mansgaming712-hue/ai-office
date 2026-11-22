@@ -271,7 +271,7 @@ Respons tetap `202`, dengan jumlah `duplicates`.
 | `POST /api/events` | Satu event atau array sampai 50. Wajib `Content-Type: application/json`. Mengembalikan `202 { ok, accepted, ids }`. | Header Bearer atau cookie sesi, selain itu `401` |
 | `GET /api/events` | 300 event terakhir. | Header Bearer atau cookie sesi, selain itu `401` |
 | `GET /api/usage` | `{ ok, usage }`: statistik pemakaian token (estimasi lokal). | Header Bearer atau cookie sesi, selain itu `401` |
-| `GET /api/divisions` | `{ ok, divisions, errors }`: divisi plugin yang ditemukan saat server mulai (`id`, `name`, `color`, `desks`, `workers`, `source`). `errors` memuat folder yang dilewati sebagai teks biasa. Tanpa path file atau teks agen. | Header Bearer atau cookie sesi, selain itu `401` |
+| `GET /api/divisions` | `{ ok, divisions, errors }`: divisi plugin yang ditemukan saat server mulai (`id`, `name`, `color`, `desks`, `workers`, `source`, dan `personalities` bila ada). `errors` memuat folder yang dilewati dan kepribadian yang diabaikan sebagai teks biasa. Tanpa path file atau teks agen. | Header Bearer atau cookie sesi, selain itu `401` |
 | `GET /api/health` | `{ ok: true }`. Di mode lokal juga mengembalikan jumlah `clients` dan `events`. | terbuka |
 | `GET /api/session` | `{ ok, authRequired, authenticated }`. | terbuka |
 | `POST /api/login` | Body `{"token":"..."}`. Mengatur cookie `aio_session`. Token salah: `401`. Terlalu banyak percobaan: `429`. | terbuka (mode lokal selalu `{ ok: true }`) |
@@ -561,6 +561,60 @@ npm run agents:install -- --allow-risky-tools --force   # juga memperbarui worke
 npm run agents:install -- --force                       # hanya menimpa file yang belum diubah dan dipasang AI Office
 npm run agents:validate                                 # memeriksa frontmatter, tool, dan frasa aturan; memberi label worker berisiko
 ```
+
+## Kepribadian worker
+
+Kepribadian adalah data tampilan opsional di `division.json` divisi. Aturan file dan batasnya ada di
+[CONTRIBUTING.md](../CONTRIBUTING.md#worker-personalities) (berbahasa Inggris). Bagian ini mencatat apa yang dikembalikan
+server dan apa yang dilakukan dasbor dengannya.
+
+- **Cakupan.** Kepribadian hanya mengubah tampilan worker di dasbor: nama panggilan, balon ucapan, kebiasaan idle, dan quirk.
+  Data ini tidak pernah masuk ke prompt agen, file agen, template tugas, argumen runner, atau hook
+  (`tests/personalityNoLeak.test.js`).
+- **`GET /api/divisions`.** Divisi plugin dengan kepribadian yang valid punya objek `personalities`, dengan kunci nama worker,
+  berisi nilai yang sudah dibersihkan. Setiap teks berbentuk `{ "en", "id" }`. Divisi tanpa kepribadian tidak punya kunci
+  `personalities`. Kepribadian yang diabaikan tercantum di `errors` sebagai `{ dir, message }`, dengan `dir` adalah nama
+  folder, dan divisinya tetap tercantum. Karakter bawaan tidak termasuk dalam respons ini. Dasbor memakai default bawaannya
+  sendiri untuk karakter tersebut (`shared/personalities.js`).
+- **Default netral.** Worker tanpa kepribadian yang valid tidak punya nama panggilan, frasa, gaya bicara, quirk, dan
+  kebiasaan idle-nya adalah `coffee`.
+- **Gerak dikurangi.** Dengan `prefers-reduced-motion: reduce`, jalan-jalan idle dan animasi kebiasaan idle dimatikan, quirk
+  yang bergerak tidak berjalan, dan quirk `headphones` tetap tampil.
+
+Identifier yang sama dipakai di setiap bahasa. Hanya deskripsi di bawah yang diterjemahkan.
+
+| Field | Identifier |
+| --- | --- |
+| `speech.tone` | `formal`, `casual`, `cheerful`, `calm`, `dry` |
+| `idle` | `coffee`, `stretch`, `phone`, `water`, `snack`, `plant`, `window`, `chat` |
+| `quirk` | `hum`, `pen-spin`, `desk-tap`, `yawn`, `glasses`, `headphones`, `plant-talk`, `doodle` |
+
+Kebiasaan idle. "Ke pantry" berarti worker juga pergi ke pantry saat idle; yang lain tetap di meja.
+
+| Identifier | Perilaku |
+| --- | --- |
+| `coffee` | Menyeruput cangkir. Ke pantry. |
+| `water` | Minum dari botol. Ke pantry. |
+| `snack` | Makan camilan. Ke pantry. |
+| `plant` | Menyiram tanaman. Ke pantry. |
+| `chat` | Melambaikan tangan. Ke pantry. |
+| `stretch` | Meregangkan badan di meja. |
+| `phone` | Melihat ponsel di meja. |
+| `window` | Menghadap jendela. |
+
+Quirk. Quirk hanya tampil saat worker sedang idle atau bekerja. Quirk bertanda "butuh meja" hanya digambar untuk karakter
+yang punya meja.
+
+| Identifier | Gambar |
+| --- | --- |
+| `hum` | Not kecil di atas kepala. |
+| `pen-spin` | Pena merah berputar di meja. Butuh meja. |
+| `desk-tap` | Tangan mengetuk meja. Butuh meja. |
+| `yawn` | Menguap di atas kepala. |
+| `glasses` | Pose kacamata. |
+| `headphones` | Headphone di sprite. Statis, jadi tetap tampil saat gerak dikurangi. |
+| `plant-talk` | Tanda hijau kecil di dekat tanaman. Butuh meja. |
+| `doodle` | Coretan kecil di meja. Butuh meja. |
 
 ## Test dan pemeriksaan
 
