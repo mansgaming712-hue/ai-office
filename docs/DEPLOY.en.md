@@ -384,9 +384,16 @@ The new token is shown once. The old token **and all browser sessions** immediat
 
 If the app fails to start with the new token, the script restores the old token automatically.
 
-> **The Sign out button only clears the cookie in that browser.** Session cookies are valid for 7 days
-> and are not recorded on the server, so they cannot be revoked one by one. To revoke **all** sessions
-> (e.g. a laptop is lost or a cookie may have been copied), run `rotate-token.sh`.
+> **Sign out revokes that session on the server, but only in memory.** Session cookies (`v2.<exp>.<sid>.<sig>`)
+> are valid for 24 hours, and Sign out adds the session id to a revocation list in the server's memory
+> (up to 10,000 entries). The list is lost when the app restarts, so a copied cookie only stays dead until
+> then. To revoke **all** sessions at once (e.g. a laptop is lost or a cookie may have been copied), run
+> `rotate-token.sh`.
+>
+> **Nginx must send `X-Real-IP`.** With `AI_OFFICE_TRUST_PROXY=1` the login rate limit is keyed by
+> `X-Real-IP` (IPv6 by /64 prefix). If the header is missing or invalid, login is rejected with `503`
+> (misconfiguration) instead of falling back to the socket address. Keep
+> `proxy_set_header X-Real-IP $remote_addr;` in the Nginx config.
 
 The manual way (if needed): create a token with `openssl rand -base64 32` or
 `node scripts/gen-token.mjs`, set it into `AI_OFFICE_TOKEN=` via `sudo nano /etc/ai-office/ai-office.env`,

@@ -8,7 +8,7 @@ const ev = { type: 'done', from: 'dev-qa', to: 'manager', message: 'x' };
 const post = (port, headers) => http(port, '/api/events', { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: ev });
 
 describe('M1: Origin mode lokal harus sama dengan Host', () => {
-  it('port lain di loopback ditolak (HTTP GET/POST dan WS); Origin sama dengan Host diterima', async () => {
+  it('port loopback lain (selain port server dan devPorts) ditolak (HTTP GET/POST dan WS); Origin sama dengan Host diterima', async () => {
     const s = await startApp();
     try {
       const rows = [];
@@ -34,7 +34,7 @@ describe('M1: Origin mode lokal harus sama dengan Host', () => {
       const ok = (r) => r[1] === 200 && r[2] === 202 && r[3] === 101;
       const no = (r) => r[1] === 403 && r[2] === 403 && r[3] === 403;
       expect(rows.map((r) => (ok(r) ? 'ok' : no(r) ? 'ditolak' : `?${r}`))).toEqual(
-        ['ditolak', 'ditolak', 'ditolak', 'ok', 'ok', 'ok', 'ditolak', 'ditolak', 'ok'],
+        ['ditolak', 'ditolak', 'ok', 'ok', 'ok', 'ok', 'ditolak', 'ditolak', 'ok'], // 5173 = devPorts bawaan
       );
     } finally {
       await s.close();

@@ -131,7 +131,8 @@ Example: `fix: keep speech bubble inside the canvas`
 An agent is a Markdown file with frontmatter. The roster must list the same name.
 
 1. Create `agents/<name>.md`. Use a lowercase kebab-case name. The file name and the `name:` field must match.
-   Set `model:` to `haiku` or `sonnet`. Other models are rejected.
+   Set `model:` to an alias (`sonnet`, `haiku`, `opus`, `inherit`, `fable`) or a full model ID that matches
+   `^claude-[a-z0-9.-]{3,60}$` (for example `claude-fable-5-1`). Anything else is rejected. Built-in agents use `sonnet` or `haiku`.
 2. Add the name to the right division in `shared/roster.js`. `tests/agents.test.js` checks that the roster and the
    files match.
 3. Run the validation:
@@ -210,7 +211,8 @@ Worker files `agents/<worker>.md`:
   `mcpServers`, or `permissionMode`) is rejected, because it could install hooks or permissions in `~/.claude`. The same
   rule applies to the built-in agents in `agents/`; `npm run agents:validate` and the test suite check it.
 - The frontmatter fields `name`, `description`, `tools`, and `model` are required. `description` is at least 80 characters.
-- `model` is `haiku` or `sonnet`.
+- `model` is an alias (`sonnet`, `haiku`, `opus`, `inherit`, `fable`) or a full ID matching `^claude-[a-z0-9.-]{3,60}$`.
+  The value is compared exactly: uppercase letters, spaces, and newlines are rejected.
 - `tools` is a comma-separated list with no duplicates, taken from `Read`, `Write`, `Edit`, `Glob`, `Grep`, `Bash`,
   `PowerShell`, `WebSearch`, `WebFetch`, `NotebookEdit`, and `TodoWrite`. `Agent` and `Task` are not allowed, so a worker
   cannot call another agent.

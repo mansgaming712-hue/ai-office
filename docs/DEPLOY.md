@@ -380,9 +380,15 @@ Token baru ditampilkan sekali. Token lama **dan semua sesi browser** langsung ti
 
 Kalau app gagal start dengan token baru, skrip memulihkan token lama secara otomatis.
 
-> **Tombol Keluar hanya menghapus cookie di browser itu.** Cookie sesi berlaku 7 hari dan tidak
-> dicatat di server, jadi tidak bisa dicabut satu per satu. Untuk mencabut **semua** sesi
-> (mis. laptop hilang atau cookie mungkin tersalin), jalankan `rotate-token.sh`.
+> **Keluar mencabut sesi itu di server, tetapi hanya di memori.** Cookie sesi (`v2.<exp>.<sid>.<sig>`)
+> berlaku 24 jam, dan Keluar memasukkan id sesi ke daftar cabut di memori server (maksimal 10.000 entri).
+> Daftar itu hilang saat app restart, jadi cookie yang tersalin hanya mati sampai saat itu. Untuk mencabut
+> **semua** sesi sekaligus (mis. laptop hilang atau cookie mungkin tersalin), jalankan `rotate-token.sh`.
+>
+> **Nginx wajib mengirim `X-Real-IP`.** Dengan `AI_OFFICE_TRUST_PROXY=1`, batas percobaan login dihitung per
+> `X-Real-IP` (IPv6 per prefix /64). Bila header hilang atau tidak valid, login ditolak dengan `503`
+> (salah konfigurasi), tidak jatuh ke alamat soket. Pertahankan `proxy_set_header X-Real-IP $remote_addr;`
+> di konfigurasi Nginx.
 
 Cara manual (kalau perlu): buat token dengan `openssl rand -base64 32` atau
 `node scripts/gen-token.mjs`, isi ke `AI_OFFICE_TOKEN=` lewat `sudo nano /etc/ai-office/ai-office.env`,

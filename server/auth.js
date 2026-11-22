@@ -2,20 +2,25 @@
 //
 // - Rahasia bersama: AI_OFFICE_TOKEN. Hooks/curl mengirim `Authorization: Bearer <token>`,
 //   browser mengirim token sekali lewat POST /api/login lalu memakai cookie aio_session.
-// - Cookie sesi stateless: "v1.<exp>.<sig>"
-//     exp = detik Unix kedaluwarsa (7 hari setelah login)
-//     sig = base64url(HMAC-SHA256(kunci, "v1.<exp>")), kunci = HKDF-SHA256(token)
+// - Cookie sesi bertanda tangan: "v2.<exp>.<sid>.<sig>"
+//     exp = detik Unix kedaluwarsa (24 jam setelah login)
+//     sid = 16 byte acak (base64url), ikut ditandatangani
+//     sig = base64url(HMAC-SHA256(kunci, "v2.<exp>.<sid>")), kunci = HKDF-SHA256(token)
 //   Restart server tidak membuat pengguna keluar; mengganti token membatalkan semua sesi.
+//   Logout mencabut sid di daftar cabut dalam memori (hilang saat restart; cookie tetap mati sendiri
+//   saat exp). Cookie v1 lama ditolak (login ulang).
 // - Semua perbandingan rahasia memakai crypto.timingSafeEqual atas digest SHA-256, supaya waktu
 //   dan panjang input tidak membocorkan isi atau panjang rahasia.
 // - Token tidak pernah ditulis ke log, respons, atau URL.
-import { createHash, createHmac, hkdfSync, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, hkdfSync, randomBytes, timingSafeEqual } from 'node:crypto';
 import { isIP } from 'node:net';
 import { t } from '../shared/i18n.js';
 import { isLoopbackHost } from './net.js';
 
 export const SESSION_COOKIE = 'aio_session';
-export const SESSION_MAX_AGE_S = 7 * 24 * 60 * 60; // 604800
+export const SESSION_MAX_AGE_S = 24 * 60 * 60; // 86400
+/** Batas daftar cabut sesi di memori; yang tertua dibuang bila penuh. */
+export const MAX_REVOKED_SESSIONS = 10_000;
 export const MIN_OPEN_TOKEN_LENGTH = 32;
 export const LOGIN_MAX_FAILURES = 10;
 export const LOGIN_WINDOW_MS = 15 * 60 * 1000;
@@ -23,7 +28,7 @@ export const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 export const MAX_SESSION_COOKIES = 20;
 /** Header Authorization yang lebih panjang dari ini tidak diperiksa (token asli 43 karakter). */
 export const MAX_AUTH_HEADER_LENGTH = 1024;
-const COOKIE_VERSION = 'v1';
+const COOKIE_VERSION = 'v2';
 
 // Di-hash sebagai UTF-16LE (unit kode apa adanya), bukan UTF-8: UTF-8 mengganti surrogate tunggal
 // dengan U+FFFD, sehingga "a\ud800" dan "a�" dulu dianggap sama. Token sendiri sudah dibatasi
@@ -71,9 +76,37 @@ function firstHeader(v) {
   return (i < 0 ? s : s.slice(0, i)).trim();
 }
 
+/** Uraikan IPv6 valid menjadi 8 hextet (angka), atau null. Zone id dibuang, ekor IPv4 diubah jadi dua hextet. */
+function ipv6Groups(ip) {
+  let s = ip.toLowerCase().split('%')[0];
+  if (s.includes('.')) {
+    const c = s.lastIndexOf(':');
+    const o = s.slice(c + 1).split('.').map(Number);
+    if (o.length !== 4 || o.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return null;
+    s = `${s.slice(0, c + 1)}${((o[0] << 8) | o[1]).toString(16)}:${((o[2] << 8) | o[3]).toString(16)}`;
+  }
+  const [head, tail, extra] = s.split('::');
+  if (extra !== undefined) return null;
+  const h = head ? head.split(':') : [];
+  const t = tail === undefined ? [] : tail ? tail.split(':') : [];
+  const fill = tail === undefined ? 0 : 8 - h.length - t.length;
+  if (tail !== undefined && fill < 1) return null;
+  const groups = [...h, ...Array(fill).fill('0'), ...t].map((g) => parseInt(g, 16));
+  return groups.length === 8 && groups.every((g) => Number.isInteger(g) && g >= 0 && g <= 0xffff) ? groups : null;
+}
+
+/**
+ * Kunci rate limit dari satu alamat. IPv4 apa adanya; IPv4-mapped (::ffff:a.b.c.d maupun bentuk hex
+ * ::ffff:102:304) menjadi IPv4; IPv6 lain menjadi prefix /64 ("2001:db8:0:1::/64"), karena satu
+ * klien biasanya memegang satu /64.
+ */
 function normalizeIp(ip) {
   const s = String(ip ?? '');
-  return s.toLowerCase().startsWith('::ffff:') && isIP(s.slice(7)) === 4 ? s.slice(7) : s;
+  if (isIP(s) !== 6) return s;
+  const g = ipv6Groups(s);
+  if (!g) return s;
+  if (g.slice(0, 5).every((x) => x === 0) && g[5] === 0xffff) return `${g[6] >> 8}.${g[6] & 255}.${g[7] >> 8}.${g[7] & 255}`;
+  return `${g.slice(0, 4).map((x) => x.toString(16)).join(':')}::/64`;
 }
 
 /**
@@ -142,30 +175,44 @@ export function createLoginLimiter({
  * Buat pemeriksa autentikasi untuk satu token. Bila token kosong, `enabled` false dan semua
  * request dianggap sah (mode lokal).
  */
-export function createAuth({ token = '', trustProxy = false, now = Date.now } = {}) {
+export function createAuth({ token = '', trustProxy = false, open = false, now = Date.now } = {}) {
   const secret = String(token ?? '').trim();
   const enabled = secret.length > 0;
   const key = enabled ? Buffer.from(hkdfSync('sha256', secret, 'ai-office/session', 'aio_session v1', 32)) : null;
 
   const sign = (payload) => createHmac('sha256', key).update(payload).digest('base64url');
 
+  // Daftar cabut: sid -> exp (detik). Entri dibuang begitu exp lewat (cookienya sudah mati sendiri).
+  const revoked = new Map();
+  function sweepRevoked(nowS) {
+    for (const [sid, exp] of revoked) if (exp <= nowS) revoked.delete(sid);
+  }
+
   function issueSessionValue() {
     const exp = Math.floor(now() / 1000) + SESSION_MAX_AGE_S;
-    const payload = `${COOKIE_VERSION}.${exp}`;
+    const payload = `${COOKIE_VERSION}.${exp}.${randomBytes(16).toString('base64url')}`;
     return `${payload}.${sign(payload)}`;
   }
 
-  /** Kembalikan detik kedaluwarsa bila nilai cookie sah, atau 0 bila tidak. */
-  function verifySessionValue(value) {
-    if (!enabled || typeof value !== 'string' || value.length > 200) return 0;
+  /** { exp, sid } bila tanda tangan dan masa berlaku sah (tanpa cek daftar cabut), atau null. */
+  function parseSessionValue(value) {
+    if (!enabled || typeof value !== 'string' || value.length > 200) return null;
     const parts = value.split('.');
-    if (parts.length !== 3 || parts[0] !== COOKIE_VERSION || !/^\d{1,12}$/.test(parts[1])) return 0;
-    const payload = `${parts[0]}.${parts[1]}`;
-    if (!safeEqual(parts[2], sign(payload))) return 0;
+    if (parts.length !== 4 || parts[0] !== COOKIE_VERSION || !/^\d{1,12}$/.test(parts[1]) || !/^[A-Za-z0-9_-]{22}$/.test(parts[2])) return null;
+    const payload = `${parts[0]}.${parts[1]}.${parts[2]}`;
+    if (!safeEqual(parts[3], sign(payload))) return null;
     const exp = Number(parts[1]);
     const nowS = Math.floor(now() / 1000);
-    if (exp <= nowS || exp > nowS + SESSION_MAX_AGE_S + 60) return 0;
-    return exp;
+    if (exp <= nowS || exp > nowS + SESSION_MAX_AGE_S + 60) return null;
+    return { exp, sid: parts[2] };
+  }
+
+  /** Kembalikan detik kedaluwarsa bila nilai cookie sah dan belum dicabut, atau 0 bila tidak. */
+  function verifySessionValue(value) {
+    const s = parseSessionValue(value);
+    if (!s) return 0;
+    sweepRevoked(Math.floor(now() / 1000));
+    return revoked.has(s.sid) ? 0 : s.exp;
   }
 
   function cookieValues(req) {
@@ -240,22 +287,36 @@ export function createAuth({ token = '', trustProxy = false, now = Date.now } = 
     isHttps,
     requestScheme,
 
-    /** IP klien: X-Real-IP (hanya dengan trustProxy dan bila valid), selain itu alamat soket. */
+    /**
+     * Kunci IP klien untuk rate limit (IPv6 -> prefix /64). Dengan trustProxy hanya X-Real-IP yang
+     * dipakai; bila hilang/tidak valid hasilnya null (salah konfigurasi proxy), BUKAN IP soket.
+     */
     clientIp(req) {
       if (trustProxy) {
         const real = firstHeader(req.headers['x-real-ip']);
-        if (real && isIP(real)) return normalizeIp(real);
+        return real && isIP(real) ? normalizeIp(real) : null;
       }
       return normalizeIp(req.socket?.remoteAddress) || 'unknown';
     },
 
+    /** Cabut sesi dari cookie yang dikirim request (cookie harus bertanda tangan sah). */
+    revoke(req) {
+      sweepRevoked(Math.floor(now() / 1000));
+      for (const v of cookieValues(req)) {
+        const s = parseSessionValue(v);
+        if (!s) continue;
+        if (revoked.size >= MAX_REVOKED_SESSIONS) revoked.delete(revoked.keys().next().value);
+        revoked.set(s.sid, s.exp);
+      }
+    },
+
     sessionCookie(req) {
-      const secure = isHttps(req) ? '; Secure' : '';
+      const secure = isHttps(req) || open ? '; Secure' : ''; // mode terbuka: Secure selalu
       return `${SESSION_COOKIE}=${issueSessionValue()}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MAX_AGE_S}${secure}`;
     },
 
     clearCookie(req) {
-      const secure = isHttps(req) ? '; Secure' : '';
+      const secure = isHttps(req) || open ? '; Secure' : '';
       return `${SESSION_COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${secure}`;
     },
   };

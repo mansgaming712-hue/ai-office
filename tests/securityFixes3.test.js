@@ -229,7 +229,7 @@ describe('B1: bearerOf linear — header Authorization > 1024 karakter ditolak t
   const BIG = [
     ['Origin 8 KB', 403, 'GET', '/api/events', [...PUB, BEARER_LINE, `Origin: https://${'a.'.repeat(4096)}example`], ''],
     ['Host 8 KB', 403, 'GET', '/api/events', [`Host: ${'a.'.repeat(4096)}`, 'X-Forwarded-Proto: https', BEARER_LINE], ''],
-    ['X-Real-IP 8 KB (login token benar, clientIp dipanggil)', 200, 'POST', '/api/login',
+    ['X-Real-IP 8 KB (login token benar, clientIp dipanggil → 503 salah konfigurasi)', 503, 'POST', '/api/login',
       [...PUB, `X-Real-IP: ${':'.repeat(8192)}`, 'Content-Type: application/json'], JSON.stringify({ token: TOKEN })],
     ['X-Forwarded-Proto 8 KB + Origin (requestScheme dipanggil)', 200, 'GET', '/api/events',
       ['Host: office.example.com', `X-Forwarded-Proto: ${'https,'.repeat(1365)}`, BEARER_LINE, 'Origin: https://office.example.com'], ''],

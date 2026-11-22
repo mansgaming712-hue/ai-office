@@ -417,7 +417,7 @@ describe('I2: mode terbuka — Origin harus sama persis (skema + host + port) de
   });
 
   it('POST /api/login memakai aturan yang sama', async () => {
-    const noAuth = { Host: 'office.example.com', 'X-Forwarded-Proto': 'https' };
+    const noAuth = { Host: 'office.example.com', 'X-Forwarded-Proto': 'https', 'X-Real-IP': '203.0.113.5' };
     expect((await login(s.port, TOKEN, { ...noAuth, Origin: 'https://office.example.com' })).status).toBe(200);
     expect((await login(s.port, TOKEN, { ...noAuth, Origin: 'http://localhost:5173' })).status).toBe(403);
     expect((await login(s.port, TOKEN, { ...noAuth, Origin: 'http://office.example.com' })).status).toBe(403);
@@ -448,8 +448,8 @@ describe.each([
   afterAll(() => s.close());
 
   it.each([
-    ['http://localhost:5173', false],
-    ['http://127.0.0.1:5173', false],
+    ['http://localhost:5173', true], // devPorts bawaan [5173]
+    ['http://127.0.0.1:5173', true],
     ['http://localhost:8080', false],
     ['same-origin', true],
     ['same-origin-127', true],
@@ -479,7 +479,7 @@ describe('I3: cookie aio_session palsu di depan tidak bisa menutupi cookie sah',
 
   it('batas pemeriksaan 20 cookie aio_session per request', () => {
     expect(MAX_SESSION_COOKIES).toBe(20);
-    expect(cookie).toMatch(/^aio_session=v1\./);
+    expect(cookie).toMatch(/^aio_session=v2\./);
   });
 
   it.each([

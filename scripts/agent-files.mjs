@@ -1,6 +1,6 @@
 // Utilitas bersama untuk membaca dan memvalidasi file agen (frontmatter YAML).
 import { createHash } from 'node:crypto';
-import { readFileSync, readdirSync, existsSync, writeFileSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, writeFileSync, lstatSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -29,8 +29,13 @@ export function riskyTools(toolsValue) {
   return String(toolsValue ?? '').split(',').map((x) => x.trim()).filter((x) => x && !SAFE_TOOLS.has(x));
 }
 
-// Model yang boleh dipakai spesialis. Model termahal (opus) sengaja dilarang untuk worker.
-export const ALLOWED_MODELS = new Set(['haiku', 'sonnet']);
+// Model yang boleh dipakai agen: alias Claude Code, atau ID model lengkap (regex ketat). Satu sumber untuk
+// validator dan test. Nilai dibandingkan apa adanya (tanpa trim): huruf besar, spasi, dan newline ditolak.
+// Default agen bawaan tetap sonnet/haiku; alias lain hanya boleh dipilih secara eksplisit.
+export const MODEL_ALIASES = ['sonnet', 'haiku', 'opus', 'inherit', 'fable'];
+export const ALLOWED_MODELS = new Set(MODEL_ALIASES);
+export const MODEL_ID_RE = /^claude-[a-z0-9.-]{3,60}$/;
+export const isAllowedModel = (m) => typeof m === 'string' && (ALLOWED_MODELS.has(m) || MODEL_ID_RE.test(m));
 
 // Nama agen: huruf kecil/angka di depan (divisi 3D: "3d-modeler"), lalu huruf kecil, angka, atau "-".
 export const AGENT_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
@@ -79,8 +84,10 @@ export function validateAgent(fileName, text) {
     if (!AGENT_NAME_RE.test(name)) errors.push(`name "${name}" harus kebab-case huruf kecil/angka`);
     if (basename(fileName, '.md') !== name) errors.push(`nama file (${fileName}) tidak sama dengan name (${name})`);
   }
-  if (typeof data.model === 'string' && data.model.trim() && !ALLOWED_MODELS.has(data.model.trim())) {
-    errors.push(`model "${data.model}" tidak diizinkan (hanya: ${[...ALLOWED_MODELS].join(', ')})`);
+  if (typeof data.model === 'string' && data.model.trim() && !isAllowedModel(data.model)) {
+    // Nilai dicetak aman (ASCII tercetak, dipotong) karena bisa berisi newline atau teks panjang.
+    const shown = data.model.replace(/[^ -~]/g, '?').slice(0, 70);
+    errors.push(`model "${shown}" tidak diizinkan (hanya: ${MODEL_ALIASES.join(', ')}, atau ID model lengkap yang cocok ${MODEL_ID_RE})`);
   }
   if (typeof data.description === 'string' && data.description.length < 80) {
     errors.push('description terlalu pendek untuk dipilih otomatis oleh manajer (< 80 karakter)');
@@ -97,12 +104,43 @@ export function validateAgent(fileName, text) {
   return { errors, data };
 }
 
-/** Baca semua *.md di sebuah folder: [{ fileName, path, text }]. */
-export function readAgentDir(dir) {
+/**
+ * Baca semua *.md di sebuah folder: [{ fileName, path, text }]. Hanya file biasa (lstat, symlink tidak diikuti).
+ * Default: entri non-file (symlink, direktori bernama *.md) dilewati diam-diam. Dengan { strict: true } entri itu
+ * dikembalikan sebagai { fileName, path, text: '', nonFile: true } supaya installer bisa menolaknya dengan jelas.
+ */
+export function readAgentDir(dir, { strict = false } = {}) {
   if (!existsSync(dir)) return [];
-  return readdirSync(dir)
-    .filter((f) => f.endsWith('.md'))
-    .map((f) => ({ fileName: f, path: join(dir, f), text: readFileSync(join(dir, f), 'utf8') }));
+  const out = [];
+  for (const f of readdirSync(dir).filter((x) => x.endsWith('.md'))) {
+    const path = join(dir, f);
+    let st = null;
+    try { st = lstatSync(path); } catch { /* hilang di antara list dan lstat */ }
+    if (st?.isFile()) out.push({ fileName: f, path, text: readFileSync(path, 'utf8') });
+    else if (strict) out.push({ fileName: f, path, text: '', nonFile: true });
+  }
+  return out;
+}
+
+/**
+ * Validasi SEMUA agen di folder sumber sebelum ada yang ditulis: validateAgent per file, entri non-file, nama
+ * duplikat, dan folder kosong/tidak ada. Mengembalikan { ok, files, errors: [{ fileName, error }] }.
+ */
+export function checkAgentSet(dir) {
+  const files = readAgentDir(dir, { strict: true });
+  const errors = [];
+  if (!files.length) return { ok: false, files, errors: [{ fileName: dir, error: 'tidak ada file agen (*.md) di folder ini' }] };
+  const names = new Map();
+  for (const f of files) {
+    if (f.nonFile) { errors.push({ fileName: f.fileName, error: 'bukan file biasa (symlink atau direktori), ditolak' }); continue; }
+    for (const error of validateAgent(f.fileName, f.text).errors) errors.push({ fileName: f.fileName, error });
+    const name = agentNameOf(f.text);
+    if (typeof name === 'string') {
+      if (names.has(name)) errors.push({ fileName: f.fileName, error: `nama "${name}" dipakai dua kali (${names.get(name)} dan ${f.fileName})` });
+      else names.set(name, f.fileName);
+    }
+  }
+  return { ok: !errors.length, files, errors };
 }
 
 /** Ambil `name` dari frontmatter tanpa memvalidasi (untuk cek nama bentrok dengan agen lain). */
