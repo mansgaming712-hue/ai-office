@@ -35,10 +35,19 @@ Useful commands:
 ```bash
 npm start                # build the UI, then run the server (http://localhost:3000)
 npm run serve            # run the server with the last build
+npm run dev              # UI development: server (3000) plus Vite dev server with hot reload (http://localhost:5173)
 npm run demo:hooks       # send a sample scenario to a running server
 npm run agents:validate  # check the agent files
 npm run open             # open the dashboard with the runner key
 ```
+
+### Developing the UI
+
+Run `npm run dev` and open http://localhost:5173. It starts the event server on port 3000 and the Vite dev server on
+port 5173 (which proxies `/api` and `/ws` to the server). Press Ctrl+C once to stop both. Only in this mode the server
+accepts the `Origin` of the Vite page, because `npm run dev` sets `AI_OFFICE_DEV_ORIGINS` to
+`http://localhost:5173,http://127.0.0.1:5173` (merged with any value you already set). `npm start` and `npm run serve`
+never accept port 5173 unless you set `AI_OFFICE_DEV_ORIGINS` yourself.
 
 ## Testing the runner without Claude Code
 

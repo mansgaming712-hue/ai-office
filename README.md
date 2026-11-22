@@ -163,6 +163,13 @@ Divisions are data, not code, and AI Office never runs them. Worker files may us
 - **"The runner is busy".** One task or demo runs at a time. Wait for it to finish, or click **Cancel** in the Tasks panel.
 - **Autostart or Windows service problems:** see [docs/REFERENCE.md](docs/REFERENCE.md#autostart).
 
+### Upgrade notes
+
+- Everyone has to log in again once: the session cookie has a new format and now lasts 24 hours.
+- Extra localhost ports (port forward, SSH tunnel, another dev server) are no longer accepted automatically. Add their
+  origins to `AI_OFFICE_DEV_ORIGINS`, for example `http://localhost:8080`.
+- To develop the UI, run `npm run dev` (server plus Vite dev server on http://localhost:5173). Port 5173 is accepted only in this mode.
+
 ### Contributing and license
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before you open a pull request, and follow the [Code of Conduct](CODE_OF_CONDUCT.md).
@@ -325,6 +332,13 @@ Divisi hanyalah data, bukan kode, dan AI Office tidak pernah menjalankannya. Fil
   Jika server menjawab "Runner key salah.", halaman yang terbuka memakai key lama; jalankan `npm run open` lagi.
 - **"Runner sedang sibuk".** Hanya satu tugas atau demo yang berjalan. Tunggu selesai, atau klik **Batalkan** di panel Tugas.
 - **Masalah autostart atau layanan Windows:** lihat [docs/REFERENCE.id.md](docs/REFERENCE.id.md#autostart).
+
+### Catatan perubahan perilaku
+
+- Semua pengguna perlu login ulang sekali: cookie sesi memakai format baru dan kini berlaku 24 jam.
+- Port localhost tambahan (port-forward, SSH tunnel, dev server lain) tidak lagi diterima otomatis. Tambahkan origin-nya
+  ke `AI_OFFICE_DEV_ORIGINS`, misalnya `http://localhost:8080`.
+- Untuk mengembangkan UI, jalankan `npm run dev` (server plus Vite dev server di http://localhost:5173). Port 5173 hanya diterima di mode ini.
 
 ### Kontribusi dan lisensi
 

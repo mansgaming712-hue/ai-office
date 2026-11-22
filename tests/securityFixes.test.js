@@ -448,8 +448,8 @@ describe.each([
   afterAll(() => s.close());
 
   it.each([
-    ['http://localhost:5173', true], // devPorts bawaan [5173]
-    ['http://127.0.0.1:5173', true],
+    ['http://localhost:5173', false], // produksi: 5173 tidak otomatis diterima
+    ['http://127.0.0.1:5173', false],
     ['http://localhost:8080', false],
     ['same-origin', true],
     ['same-origin-127', true],

@@ -158,6 +158,13 @@ Divisi hanyalah data, bukan kode, dan AI Office tidak pernah menjalankannya. Fil
 - **"Runner sedang sibuk".** Hanya satu tugas atau demo yang berjalan. Tunggu selesai, atau klik **Batalkan** di panel Tugas.
 - **Masalah autostart atau layanan Windows:** lihat [docs/REFERENCE.id.md](docs/REFERENCE.id.md#autostart).
 
+### Catatan perubahan perilaku
+
+- Semua pengguna perlu login ulang sekali: cookie sesi memakai format baru dan kini berlaku 24 jam.
+- Port localhost tambahan (port-forward, SSH tunnel, dev server lain) tidak lagi diterima otomatis. Tambahkan origin-nya
+  ke `AI_OFFICE_DEV_ORIGINS`, misalnya `http://localhost:8080`.
+- Untuk mengembangkan UI, jalankan `npm run dev` (server plus Vite dev server di http://localhost:5173). Port 5173 hanya diterima di mode ini.
+
 ### Kontribusi dan lisensi
 
 Baca [CONTRIBUTING.md](CONTRIBUTING.md) sebelum membuka pull request, dan ikuti [Kode Etik](CODE_OF_CONDUCT.md).

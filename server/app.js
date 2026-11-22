@@ -35,8 +35,10 @@
 //   tanpa allowedHosts  → loopback saja bila mendengar di loopback; host apa pun bila tidak
 // Header Origin (browser dari situs lain tidak boleh membaca atau mengirim event):
 //   mode lokal / token di loopback → hanya Origin loopback (http/https) dengan port soket server sendiri atau
-//                                     port di opsi devPorts (bawaan [5173], Vite), plus origin di devOrigins
-//                                     (env AI_OFFICE_DEV_ORIGINS). Origin "null" / skema lain ditolak.
+//                                     port di opsi devPorts (bawaan [], tidak ada), plus origin di devOrigins
+//                                     (env AI_OFFICE_DEV_ORIGINS). Port dev Vite 5173 TIDAK otomatis diterima:
+//                                     hanya lewat `npm run dev` (scripts/dev.mjs) atau env itu. Origin "null" /
+//                                     skema lain ditolak.
 //   mode terbuka                    → Origin harus sama persis (skema + host + port) dengan alamat yang
 //                                     dibuka browser, dan hostname-nya harus host yang diizinkan
 // Log: default hanya metadata event ("[event] type from → to (N karakter)"). Isi pesan ikut dicatat
@@ -82,7 +84,7 @@ export function createAiOfficeServer({
   logMessages = false,
   dedupWindowMs = 3000,
   devOrigins: devOriginList = [],
-  devPorts = [5173], // port dev server Vite (vite.config.js); Origin loopback di port ini diterima di mode lokal
+  devPorts = [], // port loopback tambahan yang diterima di mode lokal; kosong = hanya port server sendiri (5173 hanya lewat devOrigins)
   usage = null,
   runnerKey = null,
   runnerEnabled = false,
@@ -151,9 +153,9 @@ export function createAiOfficeServer({
     const origin = req.headers.origin;
     if (!origin) return true; // klien non-browser (hook, curl)
     if (!openMode) {
-      // Mode lokal / token di loopback: Origin harus sama dengan header Host (host + port); localhost,
-      // 127.0.0.1, dan [::1] di port yang sama dianggap setara. Halaman lain di loopback (port lain)
-      // ditolak. Origin dev server (mis. Vite 5173) hanya lewat opsi devOrigins.
+      // Mode lokal / token di loopback: Origin loopback harus memakai port soket server sendiri; localhost,
+      // 127.0.0.1, dan [::1] dianggap setara. Port loopback lain ditolak, termasuk 5173 (Vite). Origin dev
+      // server hanya lewat opsi devOrigins (AI_OFFICE_DEV_ORIGINS, diisi oleh `npm run dev`) atau devPorts.
       let o;
       try {
         o = new URL(origin);

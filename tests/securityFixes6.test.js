@@ -214,12 +214,19 @@ describe('Origin loopback: hanya port server sendiri atau devPorts', () => {
   it('port soket sendiri (localhost, 127.0.0.1, [::1]) diterima untuk /api dan /ws', async () => {
     for (const host of ['localhost', '127.0.0.1', '[::1]']) expect(await statusOf({}, (p) => `http://${host}:${p}`)).toEqual(ALLOW);
   });
-  it('devPorts bawaan 5173 diterima; port lain ditolak; devPorts kustom menggantikan bawaan', async () => {
-    expect(await statusOf({}, () => 'http://localhost:5173')).toEqual(ALLOW);
+  it('bawaan (produksi): 5173 dan port lain ditolak; devPorts eksplisit membuka port itu saja', async () => {
+    expect(await statusOf({}, () => 'http://localhost:5173')).toEqual(DENY);
+    expect(await statusOf({}, () => 'http://127.0.0.1:5173')).toEqual(DENY);
     expect(await statusOf({}, () => 'http://127.0.0.1:5174')).toEqual(DENY);
-    expect(await statusOf({ devPorts: [] }, () => 'http://localhost:5173')).toEqual(DENY);
+    expect(await statusOf({ devPorts: [5173] }, () => 'http://localhost:5173')).toEqual(ALLOW);
     expect(await statusOf({ devPorts: [4000] }, () => 'http://localhost:4000')).toEqual(ALLOW);
     expect(await statusOf({ devPorts: [4000] }, () => 'http://localhost:5173')).toEqual(DENY);
+  });
+  it('mode dev: devOrigins (AI_OFFICE_DEV_ORIGINS dari npm run dev) menerima 5173 untuk /api dan /ws', async () => {
+    const dev = { devOrigins: ['http://localhost:5173', 'http://127.0.0.1:5173'] };
+    expect(await statusOf(dev, () => 'http://localhost:5173')).toEqual(ALLOW);
+    expect(await statusOf(dev, () => 'http://127.0.0.1:5173')).toEqual(ALLOW);
+    expect(await statusOf(dev, () => 'http://localhost:5174')).toEqual(DENY);
   });
   it('port 80/443 eksplisit atau tersirat ditolak walau Host tanpa port', async () => {
     expect(await statusOf({}, () => 'http://localhost:80', { Host: 'localhost' })).toEqual(DENY);
