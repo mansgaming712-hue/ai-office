@@ -462,6 +462,195 @@ Starter packs live in `division-packs/`. A pack uses the same format as a divisi
    Without this change, `npm test` fails.
 6. Run `npm test`, then open a pull request that describes the pack and what it is for.
 
+## Creating a theme
+
+An office theme is a folder of plain data. It changes the colours and the decoration of the office background. It
+never changes the agents, the divisions, the status colours, or the server. The UI reads the themes when it is built,
+and the user picks one in **Settings**.
+
+### Folder structure
+
+```text
+themes/
+  kafe/                       folder name = theme id
+    theme.json                the only file in the folder
+```
+
+- The folder name must equal the `id` in `theme.json`.
+- The five built-in themes are `jakarta` (the default), `startup-cozy`, `cyberpunk`, `kafe`, and `stasiun-luar-angkasa`.
+- The UI loads the themes with `import.meta.glob` when it is built. After you add or change a theme, run `npm run build`
+  (or `npm start`, which builds first), then reload the page.
+- An invalid theme is skipped. The browser console shows a warning, and the Settings dialog lists the skipped folder with
+  its first errors. Other themes still load. `jakarta` must be valid: if it is not, the theme registry throws an error
+  at load time.
+
+### theme.json fields
+
+| Field | Required | Rules |
+| --- | --- | --- |
+| `id` | yes | `^[a-z0-9][a-z0-9-]{0,31}$`. Must equal the folder name. |
+| `name` | yes | `{ "en": "...", "id": "..." }`. Both languages are required. 1 to 40 characters after trimming. |
+| `description` | no | `{ "en": "...", "id": "..." }`. Each language is optional. At most 200 characters after trimming. The Settings dialog shows `en` when `id` is missing. |
+| `palette` | yes | Object with `day` and/or `night`. Each variant is optional. See [Palette](#palette). |
+| `decor` | no | Values from the decor vocabulary, plus `seed` and `props`. Missing keys use the Jakarta look. |
+| `sprites` | no | Up to 8 sprites, keyed by sprite id. |
+
+Other top-level keys are errors, and so are unknown keys inside `palette`, `decor`, `sprites`, and `name`. Text must not
+contain control characters. The JSON must be at most 65,536 characters after `JSON.stringify` (`maxBytes` in
+`shared/themes.js`).
+
+### Palette
+
+Each variant (`day`, `night`) is an object. Any key you do not write is taken from `jakarta`, so a theme can change only
+the colours it needs. Only `jakarta` must define every key.
+
+| Kind | Value | Example |
+| --- | --- | --- |
+| Colour | `"#rrggbb"` (hex digits, either case) | `"floor": "#c9a57a"` |
+| Transparent colour | `{ "color": "#rrggbb", "alpha": 0 to 1 }` | `"shadow": { "color": "#28190a", "alpha": 0.25 }` |
+| Number | `0` to `1` | `"zoneFill": 0.16` |
+
+Alpha keys: `shadow`, `shadowSoft`, `glassWall`, `glassSheen`, `rainTint`, `steam`. Number keys: `zoneFill` (tint of a
+division zone on the floor) and `zoneEdge`.
+
+Keys to start with:
+
+- Floor and wall: `floor`, `floorLine`, `floorTick`, `wall`, `wallBase`, `wallBaseHi`
+- Text: `ink`, `inkSoft`, `onRug`, `onDoor`, `onTray`
+- Bubbles, posters, and signs: `bubblePaper`, `bubbleInk`, `bubbleTag`, `bubbleWarn`, `bubbleWarnInk`, `posterPaper`,
+  `posterInk`, `signPaper`, `signInk`
+- Furniture and rugs: `deskTop`, `deskFront`, `rugA`, `rugB`, `trayIn`, `counterTop`, `tableTop`, `outline`
+- Sky and city: `skyTop`, `skyMid`, `skyLow`, `farBldg`, `nearBldg`, `roadDim`
+- Accents used by decorations: `accentA`, `accentB`, `accentC`, `star`, `sun`
+- Shadows and glass: `shadow`, `glassWall`, `rainTint`
+
+The full list is in `COLOR_KEYS`, `ALPHA_KEYS`, and `NUMBER_KEYS` in `shared/themes.js`. Division colours, status colours,
+and character colours are the same in every theme (see the header of `src/office/palette.js`).
+
+`day` is used when the time mode shows the day look, and `night` for the night look. The two variants are independent.
+
+### Decor vocabulary
+
+Only these values are accepted. Any other value is an error.
+
+| Key | Values | Notes |
+| --- | --- | --- |
+| `skyline` | `city`, `neon`, `stars`, `hills`, `none` | `city` is the Jakarta skyline, `neon` adds neon signs to it, `stars` draws a space view with a planet, `hills` draws hills, `none` draws an open sky. |
+| `windowStyle` | `classic`, `plain`, `blinds` | `classic` is the Jakarta look. |
+| `floor` | `wood`, `tile`, `metal`, `carpet`, `checker` | `wood` is the Jakarta look. |
+| `wall` | `plain`, `brick`, `panel`, `stripe`, `circuit` | `plain` is the Jakarta look. |
+| `plants` | `leafy`, `cactus`, `crystal`, `none` | `leafy` is the Jakarta look. |
+| `posters` | `classic`, `neon`, `art`, `none` | `classic` is the Jakarta look. |
+| `pantry` | `kopi`, `bar`, `espresso`, `galley` | `kopi` is the Jakarta look. |
+| `lights` | `none`, `fairy`, `neon`, `pendant`, `strip` | `none` is the Jakarta look. |
+| `seed` | integer `0` to `9999` | Shifts the random sequence that the decorations use. `0` is the original Jakarta sequence (`makeRnd` in `src/office/scene.js`). |
+| `props` | list of at most 8 `{ "sprite": "<id>", "slot": "<slot>" }` | Each slot can be used once. The sprite must exist in `sprites`. |
+
+Defaults when a key is missing: `skyline` city, `windowStyle` classic, `floor` wood, `wall` plain, `plants` leafy,
+`posters` classic, `pantry` kopi, `lights` none, `seed` 0, `props` empty (`DECOR_DEFAULTS`). The Jakarta styles are drawn
+in `src/office/scene.js`; the other styles are drawn in `src/office/decor.js`.
+
+Prop slots (`PROP_SLOTS` in `shared/themes.js`, positions in `PROP_ANCHORS` in `src/office/decor.js`):
+
+| Slot | Point on the canvas | Anchor |
+| --- | --- | --- |
+| `wall-left` | x 26, y 16 | `center`: the sprite is centred on the point (wall above the CEO door) |
+| `floor-left` | x 30, y 126 | `bottom`: the sprite stands on the point (floor left, below the door) |
+| `floor-center` | x 240, y 128 | `bottom`: the sprite stands on the point (floor below the manager rug) |
+
+There are only three slots, so a theme shows at most three props.
+
+### Sprites
+
+- Sprite id: `^[a-z][a-z0-9-]{0,15}$`. At most 8 sprites per theme.
+- `colors`: 1 to 16 entries. Each key is one printable ASCII character from `!` to `~` (no space). Each value is
+  `"#rrggbb"`, or `null` for a transparent pixel.
+- `rows`: 1 to 32 strings. Every row must have the same length, between 1 and 32 characters, and every character must be
+  a key in `colors`.
+- One character is one pixel on the canvas. The renderer draws each row as runs of one colour.
+
+### Data only, never executed
+
+A theme is data. `shared/themes.js` parses the JSON, reads only the fields listed above, checks every value, and builds a
+new object. No script, HTML, or CSS in a theme is run. Colours must match `#rrggbb`, which blocks CSS injection, and theme
+text is shown as plain text. The built-in theme test also rejects `<script`, `javascript:`, `url(`, and `expression(` in
+the built-in JSON files.
+
+### Contrast rule
+
+Text on the office background must reach a contrast of 4.5:1 (WCAG AA) against its background, in both `day` and `night`.
+The pairs are in `CONTRAST_PAIRS` in `src/office/palette.js`:
+
+- `ink` and `inkSoft` on `floor`
+- `onRug` on `rugB` and on `rugA`; `onDoor` on `doorPanel`; `onTray` on `trayIn`
+- `bubbleInk` and `bubbleTag` on `bubblePaper`; `bubbleWarnInk` on `bubbleWarn`
+- `posterInk` on `posterPaper`; `signInk` on `signPaper`
+
+The test also checks the division labels (`ink` and `inkSoft` on the floor tinted by the division colour, using
+`zoneFill`), and `ink` and `inkSoft` on `floorLine` when `floor` is `checker`.
+
+The test in `tests/themesBuiltin.test.js` runs these checks for the five built-in themes in both variants. It does not run
+for a theme that is not in its `BUILTIN` list. To check a new built-in theme, add its id to `BUILTIN` in that file. The
+same test also expects exactly the five built-in folders, each holding only `theme.json`, and each built-in theme must
+differ from `jakarta` in at least five decor values, have at least one sprite and one prop, and have a description of
+more than 10 characters in both languages.
+
+### Testing a theme
+
+```bash
+npm test          # validator, built-in themes, and the contrast checks
+npm run build     # build the UI; the theme files are bundled here
+npm start         # build, then run the server at http://localhost:3000
+```
+
+Then open the dashboard, click **Settings**, and choose the theme in the office theme group. To see both looks, set the
+time mode to `day` and then `night`. If the theme does not appear, check the list of skipped themes in the same dialog.
+
+### Example
+
+An excerpt of `themes/kafe/theme.json`, with the `cup` sprite. The full file is in the repository. This excerpt has not
+been run through the validator in this session.
+
+```json
+{
+  "id": "kafe",
+  "name": { "en": "Cafe", "id": "Kafe" },
+  "palette": {
+    "day": { "floor": "#f0e6d2", "floorLine": "#c9bba0", "wall": "#b5654a", "zoneFill": 0.16, "zoneEdge": 0.5 }
+  },
+  "decor": {
+    "skyline": "none",
+    "floor": "checker",
+    "wall": "brick",
+    "plants": "cactus",
+    "pantry": "espresso",
+    "lights": "pendant",
+    "seed": 37,
+    "props": [{ "sprite": "cup", "slot": "wall-left" }]
+  },
+  "sprites": {
+    "cup": {
+      "colors": { ".": null, "S": "#d9d2c6", "C": "#6b3f22", "W": "#f4efe6", "K": "#8a5a3a" },
+      "rows": [
+        "..S..S..S...",
+        ".S..S..S....",
+        "............",
+        "CCCCCCCCCC..",
+        "CKKKKKKKKCCC",
+        "CWWWWWWWWC.C",
+        "CWWWWWWWWC.C",
+        "CWWWWWWWWCCC",
+        ".CWWWWWWC...",
+        "..CCCCCC....",
+        "CCCCCCCCCCCC"
+      ]
+    }
+  }
+}
+```
+
+The `night` variant and the other keys come from `jakarta`. The `.` character maps to `null`, so those pixels are transparent.
+
 ## Good first issues
 
 Issues labelled `good first issue` are small and self-contained. Each one lists the files involved and the

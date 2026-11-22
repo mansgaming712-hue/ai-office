@@ -13,6 +13,7 @@ Isi:
 - [Autentikasi, mode server, dan runner key](#autentikasi-mode-server-dan-runner-key)
 - [Autostart](#autostart)
 - [Divisi buatan pengguna](#divisi-buatan-pengguna)
+- [Tema kantor dan pengaturan](#tema-kantor-dan-pengaturan)
 - [Test dan pemeriksaan](#test-dan-pemeriksaan)
 - [Struktur folder](#struktur-folder)
 
@@ -616,6 +617,59 @@ yang punya meja.
 | `plant-talk` | Tanda hijau kecil di dekat tanaman. Butuh meja. |
 | `doodle` | Coretan kecil di meja. Butuh meja. |
 
+## Tema kantor dan pengaturan
+
+Latar kantor punya lima tema bawaan, dan dialog **Pengaturan** memilih tema, mode waktu, pengaturan gerak, dan hujan.
+Tema berupa berkas `themes/<id>/theme.json`: hanya data, tanpa kode. Cara menulisnya ada di
+[Membuat tema](../CONTRIBUTING.md#creating-a-theme) (berbahasa Inggris).
+
+Lokasi kodenya:
+
+- `themes/` (data), `shared/themes.js` (validator dan batasnya)
+- `src/office/themeRegistry.js` (memuat tema saat build), `src/office/decor.js` (menggambar dekorasi), `src/office/palette.js` (palet dan `CONTRAST_PAIRS`)
+- `src/settings.js` (penyimpanan pengaturan), `src/ui/SettingsDialog.jsx` (dialog)
+
+### Tema
+
+| Id | Catatan |
+| --- | --- |
+| `jakarta` | Bawaan. Tampilan asli. `theme.json`-nya mendefinisikan semua kunci palet, dan tema lain jatuh ke nilainya. |
+| `startup-cozy` | Tema bawaan. |
+| `cyberpunk` | Tema bawaan. |
+| `kafe` | Tema bawaan. |
+| `stasiun-luar-angkasa` | Tema bawaan. |
+
+Id sama dengan nama folder. Tema yang tidak valid dilewati dengan peringatan, dan dialog Pengaturan menampilkannya. Bila
+id tema yang tersimpan tidak ada, dasbor menampilkan `jakarta`, dan nilai yang tersimpan tetap dibiarkan.
+
+### Pengaturan
+
+Pengaturan berupa satu objek JSON di `localStorage` dengan kunci `ai-office-settings` (lihat [Kunci localStorage](#kunci-localstorage)).
+
+| Kolom | Nilai | Bawaan | Arti |
+| --- | --- | --- | --- |
+| `officeTheme` | id tema | `jakarta` | Tema kantor. |
+| `timeMode` | `follow`, `day`, `night` | `follow` | `follow` mengikuti tema antarmuka terang atau gelap (terang = day, gelap = night). `day` dan `night` mengunci tampilan. |
+| `motion` | `system`, `reduce`, `full` | `system` | `system` mengikuti `prefers-reduced-motion`. `reduce` dan `full` menimpanya. |
+| `rain` | `true`, `false` | `false` | Hujan di kantor. Kotak centang mati dan tidak bisa diubah saat gerak dikurangi. Nilai tersimpan tetap dipertahankan. |
+
+Elemen akar mendapat `data-motion="reduce"` atau `data-motion="full"`, dan atribut dihapus untuk `system`.
+
+### Kunci localStorage
+
+| Kunci | Nilai | Dikelola oleh | Catatan |
+| --- | --- | --- | --- |
+| `ai-office-settings` | JSON, misalnya `{"v":1,"officeTheme":"jakarta","timeMode":"follow","motion":"system","rain":false}` | `src/settings.js` | `v` harus `1`. Kolom yang tidak dikenal dibuang saat disimpan. Nilai lebih dari 4096 karakter, JSON yang rusak, atau `v` lain dianggap rusak, dan bawaan dipakai. |
+| `ai-office-rain` | `"1"` untuk hujan aktif, selain itu nonaktif | `src/settings.js` (lama) | Hanya dibaca bila `ai-office-settings` belum ada. Nilainya lalu disalin ke kunci baru. Kode tidak menghapusnya. Bila `ai-office-settings` ada tetapi rusak, bawaan dipakai, `rain` tetap membaca kunci ini, dan tidak ada yang ditulis. |
+| `ai-office-lang` | `en` atau `id` | `src/i18n.js` | Bahasa antarmuka. Dibaca sebelum render pertama. Bukan bagian objek pengaturan. |
+| `ai-office-theme` | `dark` atau `light` | `src/theme.js` dan `public/theme-init.js` | Mode terang atau gelap antarmuka, terpisah dari tema kantor. Bila kosong atau tidak valid, preferensi sistem dipakai, dan preferensi yang tidak diketahui berarti `dark`. |
+
+Semua akses storage dibungkus `try`/`catch`. Bila storage diblokir atau penuh, perubahan tetap berlaku di memori sampai
+halaman dimuat ulang.
+
+Identifier di bagian ini (id tema, `follow`, `day`, `night`, `system`, `reduce`, `full`, dan nama kunci) sama dengan
+referensi bahasa Inggris.
+
 ## Test dan pemeriksaan
 
 ```bash
@@ -643,6 +697,7 @@ agents/                    17 definisi subagen (sumber), termasuk divisi 3D (3d-
 divisions/                divisi buatanmu, satu folder per divisi (hanya README.md yang dikirim); lihat CONTRIBUTING.md
 division-packs/           starter pack untuk npm run division:add (dev-team, content-team, research-team, example-legal)
 locales/                   terjemahan: en.json dan id.json (namespace cli, ui, office)
+themes/                    tema kantor, satu folder per tema dengan theme.json (jakarta bawaan); lihat CONTRIBUTING.md
 CLAUDE.md                  aturan manajer (dipakai Claude Code saat berjalan di folder ini)
 output/                    hasil tugas dan demo, satu folder per proses (dibuat otomatis, diabaikan git)
 data/                      cache statistik pemakaian (dibuat otomatis, diabaikan git)
