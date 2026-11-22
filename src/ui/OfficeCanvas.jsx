@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { getState, subscribe } from '../divisions.js';
 import { t, useLang } from '../i18n.js';
 import { frameDelta } from '../motion.js';
@@ -6,26 +6,23 @@ import { COMPACT_QUERY, FRAME_PAD, FRAME_PAD_COMPACT, fitCanvas } from '../offic
 import { BASE_H, H, W } from '../office/layout.js';
 import { createRenderer } from '../office/render.js';
 
-const RAIN_KEY = 'ai-office-rain';
-
-function readRain() {
-  try {
-    return window.localStorage.getItem(RAIN_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
 /**
  * Canvas kantor: loop animasi berbasis delta time + klik worker untuk mengisi kotak perintah.
  * `overlay` menutupi kanvas persis (loading); `children` dirender di area kanvas, di luar bingkai (kartu kosong).
- * Tombol kecil di pojok kanvas menyalakan hujan di jendela (dekoratif, tersimpan; mati saat reduced motion).
+ * Tema kantor (`officeTheme` = objek dari themeRegistry) dan varian waktu (`variant` 'day'|'night'); tanpa itu, `theme`
+ * ('light'|'dark') memilih tema Jakarta siang/malam. Pergantian mereset cache latar renderer.
+ * Tombol kecil di pojok kanvas menyalakan hujan di jendela (dekoratif; pilihan disimpan oleh induk lewat
+ * `onToggleRain`; mati saat reduced motion).
  */
 export default function OfficeCanvas({
   office,
   onSelectWorker,
   limitWarning = false,
   theme = 'dark',
+  officeTheme = null,
+  variant = undefined,
+  rain = false,
+  onToggleRain = undefined,
   reducedMotion = false,
   overlay = null,
   children,
@@ -36,9 +33,8 @@ export default function OfficeCanvas({
   const rendererRef = useRef(null);
   const selectRef = useRef(onSelectWorker);
   selectRef.current = onSelectWorker;
-  const themeRef = useRef(theme);
-  themeRef.current = theme;
-  const [rain, setRain] = useState(readRain);
+  const sceneRef = useRef(null);
+  sceneRef.current = { arg: officeTheme ?? theme, variant };
   // Roster plugin berubah → tinggi kanvas berubah: render ulang (rasio) dan hitung ulang ukuran.
   const rosterVersion = useSyncExternalStore(subscribe, () => getState().version, () => 0);
   const fitRef = useRef(null);
@@ -47,7 +43,7 @@ export default function OfficeCanvas({
   useEffect(() => {
     const canvas = canvasRef.current;
     const wrap = wrapRef.current;
-    const renderer = createRenderer(canvas, { theme: themeRef.current });
+    const renderer = createRenderer(canvas, { theme: sceneRef.current.arg, variant: sceneRef.current.variant });
     rendererRef.current = renderer;
     document.fonts?.load('8px "VT323"').catch(() => {});
 
@@ -116,8 +112,8 @@ export default function OfficeCanvas({
   }, [rosterVersion]);
 
   useEffect(() => {
-    rendererRef.current?.setTheme(theme);
-  }, [theme]);
+    rendererRef.current?.setTheme(officeTheme ?? theme, variant);
+  }, [officeTheme, theme, variant]);
 
   useEffect(() => {
     office.setReducedMotion(reducedMotion);
@@ -126,16 +122,6 @@ export default function OfficeCanvas({
   useEffect(() => {
     office.setRain(rain);
   }, [office, rain]);
-
-  const toggleRain = () => {
-    const next = !rain;
-    setRain(next);
-    try {
-      window.localStorage.setItem(RAIN_KEY, next ? '1' : '0');
-    } catch {
-      // penyimpanan diblokir: pilihan tetap berlaku selama halaman terbuka
-    }
-  };
 
   const onClick = (e) => {
     const r = canvasRef.current.getBoundingClientRect();
@@ -162,7 +148,7 @@ export default function OfficeCanvas({
           aria-label={t('office.rain.label')}
           title={t('office.rain.label')}
           disabled={reducedMotion}
-          onClick={toggleRain}
+          onClick={() => onToggleRain?.(!rain)}
         >
           <svg viewBox="0 0 16 12" width="16" height="12" aria-hidden="true" focusable="false">
             <path className="rain-cloud" d="M3 7h10V5h-1V3H9V2H6v1H5v2H3z" />

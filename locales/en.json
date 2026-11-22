@@ -475,7 +475,27 @@
     "auth.loginHttp": "Sign-in failed (HTTP {status}). Try again.",
     "auth.logoutFail": "Logout failed ({detail}). The session may still be active.",
     "canvas.aria": "AI Office floor plan: the manager's desk in front, worker desks per division including the 3D Division. Each agent's status (idle, working, done, error) is also listed in the side panel.",
-    "canvas.ariaWarning": " Warning at the manager: limit almost used up, saving mode."
+    "canvas.ariaWarning": " Warning at the manager: limit almost used up, saving mode.",
+    "settings.open": "Settings",
+    "settings.title": "Settings",
+    "settings.close": "Close settings",
+    "settings.intro": "Changes apply right away and are saved in this browser.",
+    "settings.theme": "Office theme",
+    "settings.lang": "Interface language",
+    "settings.time": "Time of day in the office",
+    "settings.time.follow": "Follow light/dark theme (default)",
+    "settings.time.day": "Always day",
+    "settings.time.night": "Always night",
+    "settings.motion": "Motion",
+    "settings.motion.system": "Follow system (default)",
+    "settings.motion.reduce": "Reduce motion",
+    "settings.motion.full": "Full motion",
+    "settings.rain": "Rain on the windows",
+    "settings.rainOff": "Rain stays off while motion is reduced.",
+    "settings.reset": "Restore defaults",
+    "settings.done": "Done",
+    "settings.skipped": "Themes skipped",
+    "settings.skippedNote": "These theme files are invalid and were not loaded:"
   },
   "office": {
     "zone.dev": "Dev Division",
@@ -544,6 +564,9 @@
     "char.3d-modeler": "Bayu",
     "char.3d-materials": "Tari",
     "char.3d-animator": "Dimas",
-    "char.3d-render": "Wulan"
+    "char.3d-render": "Wulan",
+    "theme.day": "Day preview",
+    "theme.night": "Night preview",
+    "theme.default": "default"
   }
 }

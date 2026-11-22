@@ -1,73 +1,37 @@
-// Palet kanvas per tema. Terang = kantor siang (palet asli); gelap = kantor malam.
-// Hanya warna lingkungan (lantai, dinding, meja, bubble, label); warna divisi, status, dan
-// karakter tetap sama di kedua tema supaya maknanya konsisten.
-// CONTRAST_PAIRS dipakai tests/theme.test.js: semua teks di kanvas harus lolos WCAG AA (4,5:1).
+// Palet kanvas per tema kantor. Sumbernya data: themes/<id>/theme.json (divalidasi shared/themes.js).
+// Tema bawaan "jakarta" = tampilan asli: day = kantor siang (terang), night = kantor malam (gelap).
+// Hanya warna lingkungan (lantai, dinding, meja, bubble, label); warna divisi, status, dan karakter tetap sama di semua
+// tema supaya maknanya konsisten. CONTRAST_PAIRS dipakai tests/themesBuiltin.test.js: semua teks di kanvas harus lolos WCAG AA (4,5:1).
+import { resolvePalette } from '../../shared/themes.js';
+import { registry } from './themeRegistry.js';
 
+const cache = new WeakMap(); // objek tema → { day, night }
+
+/** Palet siap pakai untuk tema (objek hasil validasi) dan varian 'day' | 'night'. Hasilnya di-cache. */
+export function paletteForTheme(theme, variant) {
+  const v = variant === 'day' ? 'day' : 'night';
+  let entry = cache.get(theme);
+  if (!entry) {
+    entry = {};
+    cache.set(theme, entry);
+  }
+  if (!entry[v]) {
+    const base = theme === registry.defaultTheme ? null : paletteForTheme(registry.defaultTheme, v);
+    entry[v] = Object.freeze(resolvePalette(theme, v, base));
+  }
+  return entry[v];
+}
+
+/** Palet Jakarta lama: terang = siang, gelap = malam. Dipertahankan untuk kode dan test yang memakai nama tema UI. */
 export const PALETTES = {
-  light: {
-    night: false,
-    floor: '#c9a57a', floorLine: '#b8926a', floorTick: '#bd986f',
-    wall: '#e4d6bf', wallBase: '#8f7a5f', wallBaseHi: '#b9a68a',
-    winFrame: '#6f5b46', winGlass: '#a9d6f2', winHi: '#c8e7fa',
-    boardFrame: '#6d6d6d', boardFace: '#f4f6f4',
-    doorFrame: '#5c4330', door: '#7a4f30', doorPanel: '#8a5d3b', doorKnob: '#e8c45a',
-    rugA: '#8f3f38', rugB: '#a24d44', rugStitch: '#c9786a',
-    deskTop: '#b07a4a', deskTopHi: '#c8915c', deskFront: '#8a5a33', deskFrontLo: '#7a4c2a',
-    monitorBody: '#2c2f3a', screenIdle: '#3a4a5e',
-    chairA: '#3d4152', chairAHi: '#565b70', chairBig: '#2a2a33', chairBigHi: '#45454f',
-    tray: '#6b5a45', trayIn: '#76624a',
-    shadow: 'rgba(40,25,10,0.25)', shadowSoft: 'rgba(40,25,10,0.18)',
-    ink: '#231c2b', inkSoft: '#3b2f49', onRug: '#fff3e0', onDoor: '#fff6e6', onTray: '#fffdf5',
-    zoneFill: 0.16, zoneEdge: 0.45,
-    bubbleBorder: '#2a2333', bubblePaper: '#fffdf5', bubbleWarn: '#fff1c9',
-    bubbleInk: '#231c2b', bubbleTag: '#5d4f70', bubbleWarnInk: '#3a2a00',
-    popup: '#ffe27a', popupShadow: '#2a2333',
-    clockFace: '#fffdf5', clockHand: '#2a2333',
-    // Kantor Jakarta (siang): langit, skyline, kaca, pantry, ruang rapat, poster.
-    outline: '#2a2233',
-    skyTop: '#7fc0ee', skyMid: '#a9d8f3', skyLow: '#dcf0f6', farBldg: '#a6c3d8', farBldgHi: '#bdd4e4',
-    nearBldg: '#6e8fae', nearBldgHi: '#8fb0cc', nearBldgLo: '#587896', bldgWin: '#b9d6ea', bldgLit: '#fff2b0',
-    cloud: '#ffffff', cloudLo: '#e3f2fa', rain: '#5f8fc0', rainTint: 'rgba(70,90,110,0.28)', beacon: '#e04848',
-    glassEdge: '#f7fbff', glassSheen: 'rgba(255,255,255,0.22)', roadDim: '#6a7a8a', carA: '#e04848', carB: '#ffffff',
-    counterTop: '#c9a06e', counterTopHi: '#ddb985', counterFront: '#8c5f3a', counterFrontLo: '#734c2c', counterKnob: '#e8c45a',
-    meetFloor: '#9aa6c0', meetFloorLine: '#8793b0', glassWall: 'rgba(190,226,245,0.38)', glassFrame: '#dfe9ef',
-    tableTop: '#a8744a', tableEdge: '#7f5532', acBody: '#eef1f3', acShade: '#c4cbd2', acLed: '#45a85a',
-    posterPaper: '#fff6dc', posterInk: '#3b2a1c', posterFrame: '#6f5b46', signPaper: '#fff6dc', signInk: '#3b2a1c',
-    steam: 'rgba(255,255,255,0.7)',
-  },
-  dark: {
-    night: true,
-    floor: '#3a2f33', floorLine: '#2f2629', floorTick: '#33292d',
-    wall: '#2d2a3f', wallBase: '#17141f', wallBaseHi: '#4a4262',
-    winFrame: '#15121c', winGlass: '#1b2650', winHi: '#2c3b78',
-    boardFrame: '#4a4a55', boardFace: '#d7dbe0',
-    doorFrame: '#1d1510', door: '#5a3a24', doorPanel: '#6b4630', doorKnob: '#e8c45a',
-    rugA: '#6b2e2c', rugB: '#7d3a35', rugStitch: '#a85d52',
-    deskTop: '#8a5f3c', deskTopHi: '#a3774f', deskFront: '#6a4628', deskFrontLo: '#573a20',
-    monitorBody: '#15161d', screenIdle: '#2a3446',
-    chairA: '#5d6280', chairAHi: '#7a80a0', chairBig: '#4a4a5c', chairBigHi: '#66667c',
-    tray: '#4d4034', trayIn: '#5a4a3a',
-    shadow: 'rgba(0,0,0,0.35)', shadowSoft: 'rgba(0,0,0,0.28)',
-    ink: '#f1e6d2', inkSoft: '#cfc2ad', onRug: '#fff3e0', onDoor: '#fff6e6', onTray: '#fffdf5',
-    zoneFill: 0.18, zoneEdge: 0.55,
-    bubbleBorder: '#a79bc0', bubblePaper: '#2a2436', bubbleWarn: '#4a2a22',
-    bubbleInk: '#f4ecdc', bubbleTag: '#c3b8da', bubbleWarnInk: '#ffe9c9',
-    popup: '#ffe27a', popupShadow: '#0f0c14',
-    clockFace: '#e9e4d6', clockHand: '#2a2333',
-    outline: '#0b0912',
-    skyTop: '#0b1233', skyMid: '#1b2557', skyLow: '#3b3470', farBldg: '#1f2754', farBldgHi: '#2b346a',
-    nearBldg: '#141a3d', nearBldgHi: '#1f2756', nearBldgLo: '#0f1430', bldgWin: '#232b5c', bldgLit: '#ffd98a',
-    cloud: '#3a4478', cloudLo: '#2c3566', rain: '#9fb6e8', rainTint: 'rgba(10,14,40,0.38)', beacon: '#ff5a5a',
-    glassEdge: '#4a4a72', glassSheen: 'rgba(160,180,255,0.12)', roadDim: '#10142e', carA: '#ff6a5a', carB: '#fff1b8',
-    counterTop: '#8a6a48', counterTopHi: '#a07d57', counterFront: '#5f4129', counterFrontLo: '#4a3220', counterKnob: '#e8c45a',
-    meetFloor: '#3d4560', meetFloorLine: '#343b54', glassWall: 'rgba(120,150,220,0.22)', glassFrame: '#5d6684',
-    tableTop: '#7d5736', tableEdge: '#5a3d24', acBody: '#b9bfc9', acShade: '#8b93a0', acLed: '#45a85a',
-    posterPaper: '#f3e7c6', posterInk: '#2b2013', posterFrame: '#2c2538', signPaper: '#f3e7c6', signInk: '#2b2013',
-    steam: 'rgba(255,255,255,0.45)',
-  },
+  light: paletteForTheme(registry.defaultTheme, 'day'),
+  dark: paletteForTheme(registry.defaultTheme, 'night'),
 };
 
 export const paletteFor = (theme) => PALETTES[theme] ?? PALETTES.dark;
+
+/** Tema UI (light/dark) → varian waktu kantor. */
+export const variantOfUiTheme = (ui) => (ui === 'light' ? 'day' : 'night');
 
 /** [teks, latar, keterangan]: pasangan warna teks di kanvas yang wajib minimal 4,5:1. */
 export const CONTRAST_PAIRS = [

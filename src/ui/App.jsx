@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState, useSyncExternalStore } from 'react';
-import { divisionName, getLang, intlLocale, t, useLang } from '../i18n.js';
+import { divisionName, getLang, intlLocale, setLang, t, useLang } from '../i18n.js';
 import { DIVISIONS, OTHER_DIVISION } from '../../shared/roster.js';
 import { applyDivisionsResponse, getState as getDivisionsState, subscribe as subscribeDivisions } from '../divisions.js';
 import { STATUS_INFO, STATUS_LABEL, UI_STATUSES, countStatuses, summaryText, uiStatusOf } from '../agentStatus.js';
@@ -22,6 +22,10 @@ import TaskViewer from './TaskViewer.jsx';
 import ThemeToggle from './ThemeToggle.jsx';
 import UsagePanel from './UsagePanel.jsx';
 import { useReducedMotion, useTheme } from './useTheme.js';
+import SettingsDialog, { GearIcon } from './SettingsDialog.jsx';
+import { useSettings } from './useSettings.js';
+import { registry } from '../office/themeRegistry.js';
+import { applyMotionAttr, resolveReducedMotion, resolveVariant, settingsStore } from '../settings.js';
 
 const LOG_LIMIT = 300;
 
@@ -50,7 +54,6 @@ function statusesOf(office) {
  * - onLogout(): Promise, keluar lalu induk pindah ke login.
  */
 export default function App({ authRequired = false, onRecheckSession, onLogout }) {
-  useLang();
   const officeRef = useRef(null);
   if (!officeRef.current) officeRef.current = new Office();
   const office = officeRef.current;
@@ -59,7 +62,16 @@ export default function App({ authRequired = false, onRecheckSession, onLogout }
   const [log, setLog] = useState([]);
   const [link, dispatchLink] = useReducer(linkReducer, initialLink);
   const { theme, toggle: toggleTheme } = useTheme();
-  const reducedMotion = useReducedMotion();
+  const systemReduced = useReducedMotion();
+  const settings = useSettings();
+  const lang = useLang();
+  const reducedMotion = resolveReducedMotion(settings.motion, systemReduced);
+  const officeTheme = registry.get(settings.officeTheme);
+  const variant = resolveVariant(settings.timeMode, { uiTheme: theme });
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  useEffect(() => {
+    applyMotionAttr(document.documentElement, settings.motion);
+  }, [settings.motion]);
   const [simRunning, setSimRunning] = useState(false);
   const [statuses, setStatuses] = useState(() => statusesOf(office));
   const [command, setCommand] = useState('');
@@ -417,6 +429,10 @@ export default function App({ authRequired = false, onRecheckSession, onLogout }
           onSelectWorker={selectWorker}
           limitWarning={limitWarning}
           theme={theme}
+          officeTheme={officeTheme}
+          variant={variant}
+          rain={settings.rain}
+          onToggleRain={(on) => settingsStore.set({ rain: on })}
           reducedMotion={reducedMotion}
           overlay={loading ? <LoadingNotice /> : null}
         >
@@ -445,6 +461,10 @@ export default function App({ authRequired = false, onRecheckSession, onLogout }
           </button>
           <LangToggle />
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
+          <button type="button" className="btn btn-theme" onClick={() => setSettingsOpen(true)} aria-haspopup="dialog" aria-expanded={settingsOpen}>
+            <GearIcon />
+            <span>{t('ui.settings.open')}</span>
+          </button>
           {authRequired && (
             <button type="button" className="btn btn-logout" onClick={logout} disabled={leaving}>
               {leaving ? t('ui.btn.loggingOut') : t('ui.btn.logout')}
@@ -608,6 +628,18 @@ export default function App({ authRequired = false, onRecheckSession, onLogout }
           </p>
         </form>
       </aside>
+      <SettingsDialog
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        settings={settings}
+        onChange={(patch) => settingsStore.set(patch)}
+        onReset={() => settingsStore.reset()}
+        themes={registry.themes}
+        problems={registry.problems}
+        lang={lang}
+        onLangChange={(code) => setLang(code)}
+        reducedMotion={reducedMotion}
+      />
       {viewerId && <TaskViewer taskId={viewerId} live={tasks.find((x) => x.id === viewerId)} onClose={() => setViewerId(null)} />}
     </div>
   );
