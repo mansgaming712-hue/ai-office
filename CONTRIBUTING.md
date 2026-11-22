@@ -234,6 +234,103 @@ Worker files `agents/<worker>.md`:
 
 The dashboard places the desks three per row. Two plugin divisions sit side by side below the Guest zone.
 
+### Worker personalities
+
+A division may add a `personalities` object to `division.json`. It gives a worker a look on the dashboard: a nickname, a
+speech tone with phrases for the speech bubble, an idle habit, and a small quirk. The object is keyed by worker name, and
+every key must also appear in `workers`:
+
+```json
+"personalities": {
+  "legal-reviewer": { "nickname": { "en": "Lena", "id": "Lena" }, "speech": { "tone": "formal" }, "idle": "water" }
+}
+```
+
+| Field | Required | Rules |
+| --- | --- | --- |
+| `nickname` | no | Text of at most 16 characters. Used as the worker's name on the dashboard. |
+| `traits` | no | List of 0 to 3 texts, each at most 20 characters. The data is validated and stored, but no dashboard element shows it yet. |
+| `speech` | no | Object. Only `tone` and `phrases` are allowed. |
+| `speech.tone` | no | One of `formal`, `casual`, `cheerful`, `calm`, `dry`. |
+| `speech.phrases` | no | List of 0 to 6 texts, each at most 40 characters. When the list is empty, the bubble uses the tone lines from `locales/*.json` (`office.tone.<tone>.1` to `.3`). |
+| `idle` | no | One of `coffee`, `stretch`, `phone`, `water`, `snack`, `plant`, `window`, `chat`. Default `coffee`. |
+| `quirk` | no | One of `hum`, `pen-spin`, `desk-tap`, `yawn`, `glasses`, `headphones`, `plant-talk`, `doodle`. Default: no quirk. |
+
+Only the fields in this table are allowed. An unknown key, at the top level or inside `speech`, makes that worker's
+personality invalid.
+
+Texts:
+
+- A text is either a string, used in both languages, or an object `{ "en": "...", "id": "..." }`. If one language is
+  missing, the other one is used for it. Only the keys `en` and `id` are allowed.
+- After trimming, a text must not be empty, must not contain control, invisible, or bidirectional characters, and is
+  measured in characters (code points).
+
+Invalid data:
+
+- An invalid personality is ignored for that worker only, with a warning. The worker and the division still load, and
+  the worker shows the neutral look. The other workers keep their personalities. The server lists each ignored
+  personality in the `errors` array of `GET /api/divisions` (as `{ dir, message }`) and writes the same message to the
+  server log.
+- Two problems still make the whole division invalid: `personalities` that is not an object, and a key that is not
+  listed in `workers`. This is the exception to the rule that one problem invalidates the whole division.
+
+Display only:
+
+- Personalities are for the dashboard only. They never enter agent prompts, the worker `.md` files, the task templates,
+  the runner arguments, or the hooks. `tests/personalityNoLeak.test.js` checks this. Do not write instructions or
+  behaviour rules in a nickname, trait, or phrase. They change how the office looks, not how the agent works.
+- A worker without a `personalities` entry looks neutral: its worker name is shown, it has no phrases and no tone, its
+  idle habit is `coffee`, and it has no quirk. The 19 built-in characters always have their own defaults.
+- With `prefers-reduced-motion: reduce`, idle walks and idle habit animations are off, the moving quirks do not run, and
+  the `headphones` quirk stays because it is static.
+
+Worked example: `example-legal`. The starter pack has one full entry and one short entry:
+
+```json
+"personalities": {
+  "example-legal-reviewer": {
+    "nickname": { "en": "Lena", "id": "Lena" },
+    "traits": [{ "en": "thorough", "id": "teliti" }, { "en": "cautious", "id": "hati-hati" }],
+    "speech": {
+      "tone": "formal",
+      "phrases": [
+        { "en": "Let me read the fine print.", "id": "Saya baca pasal kecilnya dulu." },
+        { "en": "Noted, pending review.", "id": "Dicatat, menunggu tinjauan." }
+      ]
+    },
+    "idle": "water",
+    "quirk": "glasses"
+  },
+  "example-legal-drafter": {
+    "nickname": "Dito",
+    "speech": { "tone": "calm" },
+    "idle": "window",
+    "quirk": "pen-spin"
+  }
+}
+```
+
+The drafter has no phrases, so its bubble uses the `calm` tone lines. `npm run division:add -- --from <starter>` copies the
+`personalities` too, and renames the keys to the new worker names, the same way it renames `workers`. After
+`division:add legal -- --from example-legal`, the new `divisions/legal/division.json` has the block with the keys
+`legal-reviewer` and `legal-drafter`.
+
+Changing the built-in defaults:
+
+The defaults are in `RAW_DEFAULTS` in `shared/personalities.js`. The exported `DEFAULT_PERSONALITIES` is the same object,
+frozen with `deepFreeze`, so change the source and not the export. To change one character:
+
+1. Edit its entry in `RAW_DEFAULTS`. The keys must stay the same 19 ids: the 17 workers, `manager`, and `ceo`.
+2. If you change a nickname, change `office.char.<id>` to the same text in both `locales/en.json` and `locales/id.json`.
+   `tests/personalities.test.js` checks that they match.
+3. Use only existing values. Each tone must be in `TONES`, each `idle` in `IDLE_KINDS`, and each `quirk` in `QUIRKS`
+   (`shared/personalities.js`). Each idle and quirk value also needs an entry in `src/office/quirks.js`. Adding a new
+   value therefore means writing its animation as well.
+4. Keep each built-in character at 1 to 3 traits and 3 to 6 phrases. Phrases must be unique across all characters, and
+   nicknames must be unique in each language. Do not copy agent instructions into phrases.
+5. Run `npm test`. The checks are in `tests/personalities.test.js` and `tests/personalityNoLeak.test.js`.
+
 ### Packs are data, not code
 
 The server reads `division.json` and the agent files as text. It parses the JSON and validates it (`shared/divisions.js`
