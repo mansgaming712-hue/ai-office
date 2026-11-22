@@ -1,9 +1,14 @@
-// Latar kantor Jakarta: digambar SEKALI ke canvas offscreen (di-cache oleh render.js) dan digambar ulang hanya saat
+// Latar kantor (tema Jakarta dan tema lain dari themes/<id>/theme.json): digambar SEKALI ke canvas offscreen (di-cache oleh render.js) dan digambar ulang hanya saat
 // tema atau ukuran berubah. Efek yang bergerak (awan, bintang, lalu lintas, hujan, uap kopi) ada di drawSkyFx/drawSteam
 // dan digambar tiap frame di atas latar yang sudah jadi, hanya di area kaca jendela.
 import {
   DECOR, DOOR, MANAGER_SPOT, MEETING, PANTRY, W, H, WALL_H, WALL_ITEMS, WINDOWS, zoneList,
 } from './layout.js';
+import { DECOR_DEFAULTS } from '../../shared/themes.js';
+import {
+  drawFloorStyle, drawHillsSky, drawLights, drawMeetingPlant, drawOpenSky, drawPantryItems, drawPlantStyle, drawPosterStyle,
+  drawProps, drawSpaceSky, drawWallStyle,
+} from './decor.js';
 
 const rect = (ctx, x, y, w, h, color) => {
   ctx.fillStyle = color;
@@ -20,13 +25,19 @@ export const rgba = (hex, a) => {
 };
 
 /** Pseudo-acak deterministik 0..1 dari bilangan bulat (supaya latar sama setiap digambar). */
-const rnd = (n) => {
+const hashRnd = (n) => {
   let x = Math.imul(n + 0x9e3779b9, 0x85ebca6b);
   x ^= x >>> 13;
   x = Math.imul(x, 0xc2b2ae35);
   x ^= x >>> 16;
   return (x >>> 0) / 4294967296;
 };
+/** Pengacak bawaan untuk satu tema: `seed` menggeser deret (seed 0 = deret asli Jakarta). Bisa diganti lewat opsi `rng`. */
+export const makeRnd = (seed = 0) => (seed ? (n) => hashRnd(n + seed * 7919) : hashRnd);
+let rnd = hashRnd; // diganti di awal drawBackground/drawSkyFx menurut tema; tidak ada Math.random di renderer
+
+/** Dekorasi bawaan (Jakarta). */
+export const DEFAULT_DECOR = DECOR_DEFAULTS;
 
 // ------------------------------------------------------------------ jendela dan skyline
 
@@ -112,16 +123,44 @@ function towerShape(ctx, t, color, hi) {
   rect(ctx, t.x, top + (t.s === 'box' ? 0 : 3), 1, t.h - 3, hi); // sisi terang
 }
 
-function facadeLights(ctx, P, t, seed) {
+function facadeLights(ctx, P, t, seed, neon = false) {
   const top = GROUND - t.h + 5;
+  const accents = [P.accentA, P.accentB, P.accentC];
   for (let y = top; y < GROUND - 1; y += 3) {
     for (let x = t.x + 2; x < t.x + t.w - 1; x += 2) {
       const r = rnd(seed + x * 31 + y * 7);
-      if (P.night) {
+      if (neon) {
+        if (r < (P.night ? 0.6 : 0.16)) rect(ctx, x, y, 1, 1, accents[Math.floor(r * 100) % 3]);
+        else if (!P.night && r < 0.55) rect(ctx, x, y, 1, 1, P.bldgWin);
+      } else if (P.night) {
         if (r < 0.42) rect(ctx, x, y, 1, 1, r < 0.08 ? '#bfe3ff' : P.bldgLit);
       } else if (r < 0.5) rect(ctx, x, y, 1, 1, P.bldgWin);
     }
   }
+}
+
+/** Tanda neon di menara (skyline "neon"): papan horizontal dan garis tepi menyala. */
+function neonSigns(ctx, P, t, i) {
+  const top = GROUND - t.h;
+  const col = [P.accentA, P.accentB, P.accentC][i % 3];
+  if (i % 2 === 0) {
+    rect(ctx, t.x + 1, top + 8, t.w - 2, 1, col);
+    rect(ctx, t.x + 1, top + 9, t.w - 2, 1, rgba(col, 0.3));
+  }
+  rect(ctx, t.x + t.w - 1, top + 4, 1, t.h - 6, rgba(col, P.night ? 0.9 : 0.6));
+}
+
+/** Papan hologram besar pengganti crane (skyline "neon"). */
+function drawBillboard(ctx, P) {
+  rect(ctx, 370, GROUND - 28, 18, 11, P.nearBldgLo);
+  rect(ctx, 370, GROUND - 28, 18, 1, P.accentA);
+  rect(ctx, 370, GROUND - 18, 18, 1, P.accentA);
+  rect(ctx, 370, GROUND - 28, 1, 11, P.accentA);
+  rect(ctx, 387, GROUND - 28, 1, 11, P.accentA);
+  rect(ctx, 373, GROUND - 25, 12, 1, P.accentB);
+  rect(ctx, 373, GROUND - 22, 8, 1, P.accentC);
+  rect(ctx, 378, GROUND - 17, 2, 17, P.nearBldgLo);
+  BEACONS.push({ x: 379, y: GROUND - 30 });
 }
 
 function drawCrane(ctx, P) {
@@ -136,7 +175,7 @@ function drawCrane(ctx, P) {
   BEACONS.push({ x: x + 4, y: GROUND - 33 });
 }
 
-function drawSkyline(ctx, P) {
+function drawSkyline(ctx, P, D) {
   BEACONS.length = 0;
   ctx.save();
   ctx.beginPath();
@@ -155,6 +194,11 @@ function drawSkyline(ctx, P) {
     rect(ctx, x, top + 25, 1, 1, P.skyLow);
     rect(ctx, x + 1, top + 26, 1, 1, P.skyMid);
   }
+  if (D.skyline === 'hills') drawHillsSky(ctx, P, rnd);
+  else if (D.skyline === 'stars') drawSpaceSky(ctx, P, rnd);
+  else if (D.skyline === 'none') drawOpenSky(ctx, P, rnd);
+  else {
+  const neon = D.skyline === 'neon';
   if (P.night) {
     for (let i = 0; i < 46; i++) {
       const sx = x0 + Math.floor(rnd(i * 5 + 1) * (x1 - x0));
@@ -181,16 +225,19 @@ function drawSkyline(ctx, P) {
   // gedung dekat dan menara penanda
   TOWERS.forEach((t, i) => {
     towerShape(ctx, t, P.nearBldg, P.nearBldgHi);
-    facadeLights(ctx, P, t, i * 977);
+    facadeLights(ctx, P, t, i * 977, neon);
+    if (neon) neonSigns(ctx, P, t, i);
     if (t.s === 'wisma' || t.s === 'antenna') BEACONS.push({ x: t.x + (t.s === 'wisma' ? 5 : 5), y: GROUND - t.h - (t.s === 'wisma' ? 5 : 6) });
   });
-  drawCrane(ctx, P);
+  if (neon) drawBillboard(ctx, P);
+  else drawCrane(ctx, P);
   // jalan layang / jalan raya di bawah
   rect(ctx, x0, GROUND - 2, x1 - x0, 2, P.roadDim);
+  }
   ctx.restore();
 }
 
-function drawWindowFrames(ctx, P) {
+function drawWindowFrames(ctx, P, style = 'classic') {
   for (const win of WINDOWS) {
     const pw = Math.floor((win.w - 8) / 3);
     // bingkai luar, kusen vertikal, dan ambang bawah
@@ -198,9 +245,18 @@ function drawWindowFrames(ctx, P) {
     rect(ctx, win.x, win.y + win.h - 4, win.w, 4, P.winFrame);
     rect(ctx, win.x, win.y, 2, win.h, P.winFrame);
     rect(ctx, win.x + win.w - 2, win.y, 2, win.h, P.winFrame);
-    for (let i = 1; i < 3; i++) rect(ctx, win.x + 2 + i * (pw + 2) - 2, win.y, 2, win.h - 2, P.winFrame);
+    // gaya "plain": kusen tengah tipis berwarna kaca (kaca satu bidang), tanpa kilau
+    for (let i = 1; i < 3; i++) rect(ctx, win.x + 2 + i * (pw + 2) - 2, win.y, 2, win.h - 2, style === 'plain' ? P.glassEdge : P.winFrame);
     rect(ctx, win.x, win.y + win.h - 4, win.w, 1, P.glassEdge);
   }
+  if (style === 'blinds') {
+    // tirai gulung setengah turun di tiap panel
+    for (const pane of paneRects()) {
+      for (let yy = pane.y; yy < pane.y + 7; yy += 2) rect(ctx, pane.x, yy, pane.w, 1, P.winFrame);
+      rect(ctx, pane.x + Math.floor(pane.w / 2), pane.y + 7, 1, 2, P.winFrame);
+    }
+  }
+  if (style === 'plain') return;
   // kilau diagonal di kaca
   ctx.fillStyle = P.glassSheen;
   for (const pane of paneRects()) {
@@ -237,12 +293,15 @@ function drawBoard(ctx, P) {
   rect(ctx, b.x + 12, b.y + b.h - 4, 4, 1, '#3b78c4');
 }
 
-function drawPosterFrame(ctx, P, p, i) {
+function drawPosterFrame(ctx, P, p, i, style = 'classic') {
+  if (style === 'none') return;
+  if (style !== 'classic') return drawPosterStyle(ctx, P, p, i, style);
   rect(ctx, p.x, p.y, p.w, p.h, P.posterFrame);
   rect(ctx, p.x + 1, p.y + 1, p.w - 2, p.h - 2, P.posterPaper);
   rect(ctx, p.x + 1, p.y + 1, p.w - 2, 4, i === 0 ? '#e04848' : '#2a9d8f');
   rect(ctx, p.x + 1, p.y + p.h - 5, p.w - 2, 1, i === 0 ? '#e04848' : '#2a9d8f');
   rect(ctx, p.x + 2, p.y + p.h - 3, p.w - 4, 1, P.posterFrame);
+  return undefined;
 }
 
 function drawDoor(ctx, P) {
@@ -259,7 +318,7 @@ function drawDoor(ctx, P) {
 
 // ------------------------------------------------------------------ pantry
 
-function drawPantry(ctx, P) {
+function drawPantry(ctx, P, style = 'kopi') {
   const c = PANTRY.counter;
   const dsp = PANTRY.dispenser;
   // dispenser galon
@@ -284,6 +343,11 @@ function drawPantry(ctx, P) {
     rect(ctx, c.x + 2 + dx, c.y + 7, 28, c.h - 10, P.counterFrontLo);
     rect(ctx, c.x + 3 + dx, c.y + 8, 26, c.h - 12, P.counterFront);
     rect(ctx, c.x + 24 + dx, c.y + 12, 2, 3, P.counterKnob);
+  }
+  if (style !== 'kopi') {
+    drawPantryItems(ctx, P, style);
+    drawPantrySign(ctx, P, c);
+    return;
   }
   // toples kopi sachet
   rect(ctx, 81, 33, 10, 2, '#d1a13a');
@@ -321,7 +385,11 @@ function drawPantry(ctx, P) {
     rect(ctx, 148 + i * 4, 40, 4, 6, '#2b2f3a');
     rect(ctx, 149 + i * 4, 41, 2, 4, col);
   });
-  // plakat Pantry
+  drawPantrySign(ctx, P, c);
+}
+
+/** Plakat Pantry di pintu lemari counter. */
+function drawPantrySign(ctx, P, c) {
   rect(ctx, c.x + 33, c.y + 14, 26, 9, P.signPaper);
   rect(ctx, c.x + 33, c.y + 14, 26, 1, P.posterFrame);
   rect(ctx, c.x + 33, c.y + 22, 26, 1, P.posterFrame);
@@ -329,7 +397,7 @@ function drawPantry(ctx, P) {
 
 // ------------------------------------------------------------------ ruang rapat berdinding kaca
 
-function drawMeeting(ctx, P) {
+function drawMeeting(ctx, P, plants = 'leafy') {
   const m = MEETING;
   rect(ctx, m.x + 2, m.y + 4, m.w - 4, m.h - 12, P.meetFloor);
   for (let y = m.y + 8; y < m.y + m.h - 8; y += 6) rect(ctx, m.x + 2, y, m.w - 4, 1, P.meetFloorLine);
@@ -355,9 +423,11 @@ function drawMeeting(ctx, P) {
   rect(ctx, tx + 78, ty + 3, 9, 6, '#d9dde3');
   rect(ctx, tx + 79, ty + 4, 7, 3, '#62c46f');
   // tanaman di sudut
-  rect(ctx, m.x + m.w - 20, m.y + 40, 12, 12, '#9a5b3a');
-  rect(ctx, m.x + m.w - 19, m.y + 28, 10, 13, '#3f8a4a');
-  rect(ctx, m.x + m.w - 17, m.y + 26, 6, 4, '#4fa35a');
+  if (plants === 'leafy') {
+    rect(ctx, m.x + m.w - 20, m.y + 40, 12, 12, '#9a5b3a');
+    rect(ctx, m.x + m.w - 19, m.y + 28, 10, 13, '#3f8a4a');
+    rect(ctx, m.x + m.w - 17, m.y + 26, 6, 4, '#4fa35a');
+  } else drawMeetingPlant(ctx, P, plants);
   // dinding kaca depan dan kiri
   const gy = m.y + m.h - 14;
   rect(ctx, m.x + 2, gy, m.w - 4, 12, P.glassWall);
@@ -407,14 +477,23 @@ function drawPlant(ctx, { x, y, w, h }) {
   rect(ctx, x + 4, y + 1, 2, 1, '#6bbf74');
 }
 
-/** Latar statis lengkap. Dipanggil sekali per tema/ukuran; hasilnya di-cache di canvas offscreen. */
-export function drawBackground(ctx, P) {
+/**
+ * Latar statis lengkap. Dipanggil sekali per tema/ukuran; hasilnya di-cache di canvas offscreen.
+ * @param {object} P       palet varian (palette.js)
+ * @param {object} [D]     dekorasi tema (shared/themes.js DECOR_VOCAB); bawaan = Jakarta
+ * @param {object} [sprites] sprite props tema (hasil validasi)
+ * @param {(n: number) => number} [rng] pengacak 0..1 yang disuntik (bawaan: deret deterministik menurut D.seed)
+ */
+export function drawBackground(ctx, P, D = DEFAULT_DECOR, sprites = {}, rng = undefined) {
+  rnd = rng ?? makeRnd(D.seed);
   rect(ctx, 0, 0, W, H, P.floor);
-  for (let y = WALL_H; y < H; y += 8) {
-    rect(ctx, 0, y, W, 1, P.floorLine);
-    const off = ((y / 8) % 2) * 24;
-    for (let x = off; x < W; x += 48) rect(ctx, x, y + 1, 1, 7, P.floorTick);
-  }
+  if (D.floor === 'wood') {
+    for (let y = WALL_H; y < H; y += 8) {
+      rect(ctx, 0, y, W, 1, P.floorLine);
+      const off = ((y / 8) % 2) * 24;
+      for (let x = off; x < W; x += 48) rect(ctx, x, y + 1, 1, 7, P.floorTick);
+    }
+  } else drawFloorStyle(ctx, P, D.floor, rnd);
   // bayangan dinding di lantai
   rect(ctx, 0, WALL_H, W, 3, P.shadowSoft);
   // karpet divisi
@@ -435,20 +514,27 @@ export function drawBackground(ctx, P) {
 
   // dinding
   rect(ctx, 0, 0, W, WALL_H, P.wall);
-  for (let x = 0; x < W; x += 24) rect(ctx, x, 0, 1, WALL_H - 4, rgba('#000000', 0.06));
+  if (D.wall === 'plain') for (let x = 0; x < W; x += 24) rect(ctx, x, 0, 1, WALL_H - 4, rgba('#000000', 0.06));
+  else drawWallStyle(ctx, P, D.wall, rnd);
   rect(ctx, 0, WALL_H - 3, W, 3, P.wallBase);
   rect(ctx, 0, WALL_H - 4, W, 1, P.wallBaseHi);
+  drawLights(ctx, P, D.lights);
 
-  drawSkyline(ctx, P);
-  drawWindowFrames(ctx, P);
+  drawSkyline(ctx, P, D);
+  drawWindowFrames(ctx, P, D.windowStyle);
   drawDoor(ctx, P);
   drawAc(ctx, P);
   drawBoard(ctx, P);
-  WALL_ITEMS.posters.forEach((p, i) => drawPosterFrame(ctx, P, p, i));
+  WALL_ITEMS.posters.forEach((p, i) => drawPosterFrame(ctx, P, p, i, D.posters));
   drawMeetBoard(ctx, P);
-  drawPantry(ctx, P);
-  drawMeeting(ctx, P);
-  for (const item of DECOR) if (item.kind === 'plant') drawPlant(ctx, item);
+  drawPantry(ctx, P, D.pantry);
+  drawMeeting(ctx, P, D.plants);
+  for (const item of DECOR) {
+    if (item.kind !== 'plant' || D.plants === 'none') continue;
+    if (D.plants === 'leafy') drawPlant(ctx, item);
+    else drawPlantStyle(ctx, P, item, D.plants);
+  }
+  drawProps(ctx, D, sprites);
 }
 
 // ------------------------------------------------------------------ efek bergerak (di atas latar)
@@ -464,12 +550,21 @@ function clipToPanes(ctx) {
  * Langit yang bergerak: awan (siang), bintang berkelip (malam), lampu merah di puncak gedung, lalu lintas,
  * dan hujan di kaca. `rain` 0..1. Reduced motion: statis (tanpa awan bergerak, tanpa hujan).
  */
-export function drawSkyFx(ctx, P, t, { rain = 0, reduced = false } = {}) {
+export function drawSkyFx(ctx, P, t, { rain = 0, reduced = false, decor = DEFAULT_DECOR, rng = undefined } = {}) {
+  rnd = rng ?? makeRnd(decor.seed);
+  const sky = decor.skyline;
+  const cityLike = sky === 'city' || sky === 'neon';
   clipToPanes(ctx);
   const x0 = WINDOWS[0].x;
   const span = WINDOWS[1].x + WINDOWS[1].w - x0 + 60;
   const k = reduced ? 0 : t;
-  if (!P.night) {
+  if (sky === 'stars') {
+    // ruang angkasa: bintang berkelip siang dan malam (reduced motion: diam)
+    for (let i = 0; i < 12; i++) {
+      const on = reduced ? i % 2 === 0 : Math.floor(t * 0.9 + i * 1.7) % 3 !== 0;
+      if (on) rect(ctx, x0 + Math.floor(rnd(i * 17 + 3) * (span - 60)), 8 + Math.floor(rnd(i * 17 + 4) * 28), 1, 1, P.star);
+    }
+  } else if (!P.night) {
     for (let i = 0; i < 4; i++) {
       const cx = x0 - 30 + ((rnd(i + 90) * span + k * (1.2 + i * 0.35)) % span);
       const cy = 11 + i * 4 + Math.floor(rnd(i + 70) * 3);
@@ -484,9 +579,9 @@ export function drawSkyFx(ctx, P, t, { rain = 0, reduced = false } = {}) {
     }
   }
   const blink = reduced || Math.floor(t * 1.1) % 2 === 0;
-  if (blink) for (const b of BEACONS) rect(ctx, b.x, b.y, 1, 1, P.beacon);
+  if (blink && cityLike) for (const b of BEACONS) rect(ctx, b.x, b.y, 1, 1, P.beacon);
   // lalu lintas (macet pelan): titik lampu/mobil di jalan layang
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < (cityLike ? 14 : 0); i++) {
     const dir = i % 2 ? 1 : -1;
     const sp = 2.2 + (i % 3) * 0.8;
     const cx = x0 + ((rnd(i + 200) * span + (reduced ? 0 : k * sp * dir) + span * 4) % span);

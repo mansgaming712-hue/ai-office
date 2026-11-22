@@ -13,16 +13,28 @@ import { STATUS_LABEL } from './engine.js';
 import {
   DOOR, FOOT, MANAGER_SPOT, MEETING, PANTRY, H, W, WALL_ITEMS, zoneList,
 } from './layout.js';
-import { paletteFor } from './palette.js';
+import { paletteForTheme, variantOfUiTheme } from './palette.js';
 import { QUIRKS, idleBehavior, idleSeatSeconds, quirkPhase } from './quirks.js';
-import { drawBackground, drawClock, drawSkyFx, drawSteam } from './scene.js';
+import { DEFAULT_DECOR, drawBackground, drawClock, drawSkyFx, drawSteam } from './scene.js';
+import { registry } from './themeRegistry.js';
 import { SIT_ROWS, SPR_H, SPR_W, createSpriteCache } from './sprites.js';
 import { CEO_ID, MANAGER_ID } from '../../shared/roster.js';
 
 const FONT = '"VT323", ui-monospace, monospace';
 
-// Palet aktif. Diganti lewat renderer.setTheme(); fungsi gambar di bawah membacanya.
-let P = paletteFor('light');
+// Palet dan dekorasi aktif. Diganti lewat renderer.setTheme(); fungsi gambar di bawah membacanya.
+let P = paletteForTheme(registry.defaultTheme, 'day');
+let D = DEFAULT_DECOR;
+let SPRITES = {};
+
+/**
+ * Tema + varian dari argumen setTheme/createRenderer. String 'light'/'dark' (tema UI lama) = tema Jakarta siang/malam;
+ * objek tema (dari themeRegistry) + varian 'day'/'night'.
+ */
+export function resolveScene(arg, variant) {
+  if (arg && typeof arg === 'object') return { theme: arg, variant: variant === 'day' ? 'day' : 'night' };
+  return { theme: registry.defaultTheme, variant: variant ?? variantOfUiTheme(arg) };
+}
 
 // Warna status per status internal engine (idle/working/done/blocked), dari model status UI.
 export const STATUS_COLOR = Object.fromEntries(
@@ -409,7 +421,7 @@ function drawLabels(ctx, office) {
   // Poster motivasi, plakat pantry dan ruang rapat (teks lewat t())
   ctx.font = `7px ${FONT}`;
   ctx.fillStyle = P.posterInk;
-  for (const p of WALL_ITEMS.posters) {
+  if (D.posters !== 'none') for (const p of WALL_ITEMS.posters) {
     const lines = wrapText(ctx, t(p.key), p.w - 5, 3);
     lines.forEach((l, i) => ctx.fillText(l, p.x + p.w / 2, p.y + 11 + i * 6));
   }
@@ -435,7 +447,7 @@ function drawLabels(ctx, office) {
 
 // ------------------------------------------------------------------ public API
 
-export function createRenderer(canvas, { theme = 'dark' } = {}) {
+export function createRenderer(canvas, { theme = 'dark', variant, clock = Date.now } = {}) {
   // Urutan pembuatan penting untuk test: pix, lalu bg. Canvas lain dibuat belakangan.
   const pix = document.createElement('canvas');
   pix.width = W;
@@ -450,16 +462,22 @@ export function createRenderer(canvas, { theme = 'dark' } = {}) {
   let labelKey = '';
   const ctx = canvas.getContext('2d');
   const sprites = createSpriteCache(() => document.createElement('canvas'));
-  let themeName = theme;
+  let sceneKey = '';
   let prevBg = null; // latar tema sebelumnya, untuk transisi halus saat tema berganti
   let drawn = false;
   let rosterVersion = getState().version;
   let fade = 0; // 1 → 0
   let fadeFrom = null;
 
-  /** Ganti palet kanvas dan gambar ulang latarnya (satu-satunya saat latar digambar ulang). */
-  function setTheme(name) {
-    if (drawn && name !== themeName) {
+  /**
+   * Ganti tema kantor + varian waktu: palet, dekorasi, dan sprite berubah, cache latar di-reset dan digambar ulang.
+   * Tanpa perubahan (tema dan varian sama) tidak ada yang digambar ulang.
+   */
+  function setTheme(arg, v) {
+    const scene = resolveScene(arg, v);
+    const key = `${scene.theme.id}|${scene.variant}`;
+    if (drawn && key === sceneKey) return;
+    if (drawn) {
       prevBg ??= document.createElement('canvas');
       prevBg.width = W;
       prevBg.height = H;
@@ -467,12 +485,14 @@ export function createRenderer(canvas, { theme = 'dark' } = {}) {
       fade = 1;
       fadeFrom = null;
     }
-    themeName = name;
-    P = paletteFor(name);
-    drawBackground(bg.getContext('2d'), P);
+    sceneKey = key;
+    P = paletteForTheme(scene.theme, scene.variant);
+    D = scene.theme.decor;
+    SPRITES = scene.theme.sprites;
+    drawBackground(bg.getContext('2d'), P, D, SPRITES);
     drawn = true;
   }
-  setTheme(theme);
+  setTheme(theme, variant);
 
   const figure = (look, role, shirt, spec, x, feetY, seated) => {
     const spr = sprites.get(look, role, shirt, P.outline, spec);
@@ -494,7 +514,7 @@ export function createRenderer(canvas, { theme = 'dark' } = {}) {
       pctx.drawImage(prevBg, 0, 0);
       pctx.globalAlpha = 1;
     }
-    drawSkyFx(pctx, P, time, { rain: rm ? 0 : office.rainLevel ?? 0, reduced: rm });
+    drawSkyFx(pctx, P, time, { rain: rm ? 0 : office.rainLevel ?? 0, reduced: rm, decor: D });
     drawClock(pctx, P, now, rm);
     if (!rm) drawSteam(pctx, P, time);
 
@@ -575,11 +595,11 @@ export function createRenderer(canvas, { theme = 'dark' } = {}) {
     prevBg = null;
     fade = 0;
     fadeFrom = null;
-    drawBackground(bg.getContext('2d'), P);
+    drawBackground(bg.getContext('2d'), P, D, SPRITES);
     labelKey = '';
   }
 
-  function draw(office, now = Date.now()) {
+  function draw(office, now = clock()) {
     syncRoster();
     if (fade > 0) {
       fadeFrom ??= office.time;
@@ -596,7 +616,7 @@ export function createRenderer(canvas, { theme = 'dark' } = {}) {
     ctx.drawImage(pix, 0, 0, cw, ch);
     const k = cw / W;
     ctx.setTransform(k, 0, 0, k, 0, 0);
-    const key = `${getLang()}|${themeName}|${cw}x${ch}|${rosterVersion}|${office.inbox}|${[...office.workers.values()].map((w) => w.name + w.status[0]).join(',')}`;
+    const key = `${getLang()}|${sceneKey}|${cw}x${ch}|${rosterVersion}|${office.inbox}|${[...office.workers.values()].map((w) => w.name + w.status[0]).join(',')}`;
     if (key !== labelKey) {
       labels.width = cw;
       labels.height = ch;
