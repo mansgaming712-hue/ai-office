@@ -7,30 +7,39 @@
 // Kunci lama hujan (`ai-office-rain`) dimigrasi ke sini saat pertama kali dimuat.
 import { DEFAULT_THEME_ID } from './office/themeRegistry.js';
 import { variantOfUiTheme } from './office/palette.js';
+import { PHASES, isPhase, phaseAt, variantOfPhase } from './office/daycycle.js';
 
 export const SETTINGS_KEY = 'ai-office-settings';
 export const SETTINGS_VERSION = 1;
 export const LEGACY_RAIN_KEY = 'ai-office-rain';
 
 /**
- * Mode waktu: cara memilih varian kantor 'day' | 'night'. Tiap mode = fungsi penentu di TIME_RESOLVERS.
- * Fase 4 cukup menambah nama di TIME_MODES dan fungsinya di TIME_RESOLVERS (mis. 'auto' memakai `now`).
+ * Mode waktu (Fase 4): cara memilih varian kantor 'day' | 'night' dan fase hari.
+ *  - 'off'  : Mati = perilaku lama, ikuti tema terang/gelap UI, tanpa tint atau lampu (bawaan).
+ *  - 'auto' : Otomatis, fase dari jam lokal browser (`now` disuntik; src/office/daycycle.js).
+ *  - 'subuh' | 'pagi' | 'siang' | 'sore' | 'malam' : Manual, fase dikunci.
+ * Tiap mode = fungsi penentu varian di TIME_RESOLVERS; `resolvePhase` menentukan fasenya (null = tanpa efek fase).
  */
-export const TIME_MODES = Object.freeze(['follow', 'day', 'night']);
+export const TIME_MODES = Object.freeze(['off', 'auto', ...PHASES]);
 export const TIME_RESOLVERS = Object.freeze({
-  follow: ({ uiTheme }) => variantOfUiTheme(uiTheme), // ikuti tema terang/gelap UI (bawaan)
-  day: () => 'day',
-  night: () => 'night',
+  off: ({ uiTheme }) => variantOfUiTheme(uiTheme), // ikuti tema terang/gelap UI (bawaan)
+  auto: ({ now }) => variantOfPhase(phaseAt(now)),
+  ...Object.fromEntries(PHASES.map((p) => [p, () => variantOfPhase(p)])),
 });
+/** Nilai lama (sebelum Fase 4) yang dimigrasi tanpa menaikkan versi: follow→off, day→siang, night→malam. */
+export const LEGACY_TIME_MODES = Object.freeze({ follow: 'off', day: 'siang', night: 'malam' });
 export const MOTION_MODES = Object.freeze(['system', 'reduce', 'full']);
 
 export const DEFAULT_SETTINGS = Object.freeze({
   v: SETTINGS_VERSION,
   officeTheme: DEFAULT_THEME_ID,
-  timeMode: 'follow',
+  timeMode: 'off',
   motion: 'system',
   rain: false,
 });
+
+/** Nama mode waktu lama → nama baru; nilai lain dikembalikan apa adanya. */
+export const normalizeTimeMode = (m) => (typeof m === 'string' && Object.hasOwn(LEGACY_TIME_MODES, m) ? LEGACY_TIME_MODES[m] : m);
 
 const THEME_ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
 const MAX_RAW = 4096; // JSON tersimpan lebih besar dari ini dianggap rusak
@@ -42,7 +51,10 @@ export function sanitizeSettings(raw, { timeModes = TIME_MODES } = {}) {
   const out = { ...DEFAULT_SETTINGS };
   if (!isPlain(raw)) return out;
   if (typeof raw.officeTheme === 'string' && THEME_ID.test(raw.officeTheme)) out.officeTheme = raw.officeTheme;
-  if (typeof raw.timeMode === 'string' && timeModes.includes(raw.timeMode)) out.timeMode = raw.timeMode;
+  if (typeof raw.timeMode === 'string') {
+    const mode = normalizeTimeMode(raw.timeMode);
+    if (timeModes.includes(mode)) out.timeMode = mode;
+  }
   if (typeof raw.motion === 'string' && MOTION_MODES.includes(raw.motion)) out.motion = raw.motion;
   if (typeof raw.rain === 'boolean') out.rain = raw.rain;
   return out;
@@ -164,11 +176,19 @@ export function createSettingsStore(storage = browserStorage()) {
 
 // ------------------------------------------------------------------ penerapan
 
-/** Varian kantor 'day' | 'night' menurut mode waktu. `now` (ms) disuntik untuk mode berbasis jam (Fase 4). */
+/** Varian kantor 'day' | 'night' menurut mode waktu. `now` (ms) disuntik untuk mode berbasis jam ('auto'). */
 export function resolveVariant(timeMode, { uiTheme = 'dark', now = Date.now() } = {}) {
-  const fn = TIME_RESOLVERS[timeMode] ?? TIME_RESOLVERS.follow;
+  const mode = normalizeTimeMode(timeMode);
+  const fn = Object.hasOwn(TIME_RESOLVERS, mode) ? TIME_RESOLVERS[mode] : TIME_RESOLVERS.off;
   const v = fn({ uiTheme, now });
   return v === 'day' ? 'day' : 'night';
+}
+
+/** Fase hari menurut mode waktu: 'auto' dari `now`, manual = fasenya, 'off'/tak dikenal = null (tanpa efek fase). */
+export function resolvePhase(timeMode, { now = Date.now() } = {}) {
+  const mode = normalizeTimeMode(timeMode);
+  if (mode === 'auto') return phaseAt(now);
+  return isPhase(mode) ? mode : null;
 }
 
 /** Gerak dikurangi? 'system' mengikuti prefers-reduced-motion; 'reduce'/'full' memaksa. */

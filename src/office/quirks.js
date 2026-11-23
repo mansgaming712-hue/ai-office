@@ -37,6 +37,35 @@ export function quirkPhase(time, seedMs, reduced = false) {
   return c >= 0 && c < QUIRK_ON ? c / QUIRK_ON : -1;
 }
 
+export const YAWN_CYCLE = 13; // detik per jendela peluang menguap (malam/subuh)
+export const YAWN_ON = 2.2; // detik menguap bila jendela itu "terpilih"
+export const YAWN_CHANCE = 0.35; // peluang per jendela pada tingkat ngantuk 1 (malam); subuh = 0.6 dari itu
+
+/** Satu langkah mulberry32 tanpa state (biji + nomor jendela → 0..1): deterministik, tanpa alokasi. */
+function roll(seed, n) {
+  let a = (Math.imul(seed | 0, 0x9e3779b1) + Math.imul(n | 0, 0x6d2b79f5)) >>> 0;
+  a = (a + 0x6d2b79f5) >>> 0;
+  let t = a;
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+/**
+ * Fase menguap 0..1 (atau -1 = tidak) untuk worker idle di fase ngantuk (`sleepy` 0..1, daycycle.js). Waktu dibagi jadi
+ * jendela YAWN_CYCLE detik per worker (digeser oleh seedMs); tiap jendela "terpilih" dengan peluang YAWN_CHANCE * sleepy,
+ * ditentukan deterministik dari seedMs dan nomor jendela. Hanya bergantung pada `time` (jam engine) jadi dapat dites.
+ * Reduced motion atau sleepy 0: selalu -1.
+ */
+export function yawnPhase(time, seedMs, sleepy, reduced = false) {
+  if (reduced || !(sleepy > 0)) return -1;
+  const c = (time + (seedMs / 1000) * 2.3) / YAWN_CYCLE;
+  const n = Math.floor(c);
+  const within = (c - n) * YAWN_CYCLE;
+  if (within >= YAWN_ON || roll(seedMs, n) >= YAWN_CHANCE * sleepy) return -1;
+  return within / YAWN_ON;
+}
+
 const px = (ctx, x, y, w, h, color) => {
   ctx.fillStyle = color;
   ctx.fillRect(Math.round(x), Math.round(y), w, h);

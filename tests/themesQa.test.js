@@ -125,7 +125,7 @@ describe('QA pengaturan: tema hilang, versi masa depan, storage melempar', () =>
     expect(registry.has(settings.officeTheme)).toBe(false);
     expect(registry.get(settings.officeTheme)).toBe(registry.defaultTheme);
     expect(registry.get(settings.officeTheme).id).toBe('jakarta');
-    expect(settings.timeMode).toBe('night'); // kolom lain tidak ikut hilang
+    expect(settings.timeMode).toBe('malam'); // kolom lain tidak ikut hilang ('night' lama dimigrasi ke 'malam')
   });
 
   it('nama bawaan Object (constructor, toString, hasOwnProperty) sebagai id tema tidak membocorkan prototipe', () => {
@@ -479,7 +479,7 @@ describe('QA pengguna lama tanpa pengaturan', () => {
     const { settings, source } = loadSettings(storage);
     expect(source).toBe('default');
     expect(storage.m.size).toBe(0);
-    expect(settings).toEqual({ v: 1, officeTheme: 'jakarta', timeMode: 'follow', motion: 'system', rain: false });
+    expect(settings).toEqual({ v: 1, officeTheme: 'jakarta', timeMode: 'off', motion: 'system', rain: false });
     expect(resolveVariant(settings.timeMode, { uiTheme: 'light' })).toBe('day');
     expect(resolveVariant(settings.timeMode, { uiTheme: 'dark' })).toBe('night');
     expect(resolveReducedMotion(settings.motion, true)).toBe(true);

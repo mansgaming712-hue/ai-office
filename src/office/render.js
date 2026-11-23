@@ -1,7 +1,8 @@
 // Renderer canvas: lapisan pixel art digambar 1:1 di canvas kecil (W x H dari layout.js), lalu diperbesar
 // tanpa smoothing. Teks (label, bubble, poster) digambar di atasnya pada resolusi layar supaya tetap tajam.
 // Performa: latar kantor (scene.js) dan sprite karakter (sprites.js) di-cache ke canvas offscreen; latar digambar
-// ulang hanya saat tema berganti. Setiap frame hanya menggambar bagian yang bergerak.
+// ulang hanya saat tema, varian, atau fase hari berganti (kunci `tema|varian|fase`; cahaya fase ikut di-cache di latar,
+// tint fase = satu fillRect per frame). Setiap frame hanya menggambar bagian yang bergerak.
 // Warna lingkungan mengikuti tema (palette.js); warna divisi dan status sama di kedua tema.
 import { GLYPHS, GLYPH_SIZE, STATUS_INFO, uiStatusOf } from '../agentStatus.js';
 import { getState } from '../divisions.js';
@@ -9,13 +10,14 @@ import { divisionName, getLang, t } from '../i18n.js';
 import { easeOutBack } from '../motion.js';
 import { personalityOf } from '../personality.js';
 import { characterName, deskLabel, lookFor, shirtOf, SKINS } from './characters.js';
+import { lookOf } from './daycycle.js';
 import { STATUS_LABEL } from './engine.js';
 import {
   DOOR, FOOT, MANAGER_SPOT, MEETING, PANTRY, H, W, WALL_ITEMS, zoneList,
 } from './layout.js';
 import { paletteForTheme, variantOfUiTheme } from './palette.js';
-import { QUIRKS, idleBehavior, idleSeatSeconds, quirkPhase } from './quirks.js';
-import { DEFAULT_DECOR, drawBackground, drawClock, drawSkyFx, drawSteam } from './scene.js';
+import { QUIRKS, idleBehavior, idleSeatSeconds, quirkPhase, yawnPhase } from './quirks.js';
+import { DEFAULT_DECOR, drawBackground, drawClock, drawDayLight, drawSkyFx, drawSteam } from './scene.js';
 import { registry } from './themeRegistry.js';
 import { SIT_ROWS, SPR_H, SPR_W, createSpriteCache } from './sprites.js';
 import { CEO_ID, MANAGER_ID } from '../../shared/roster.js';
@@ -244,7 +246,7 @@ function drawQuirkFx(ctx, kind, { x, headY, desk, time, seedMs, rm }) {
 const walkFrame = (dist) => Math.floor(dist / 7);
 
 /** Spesifikasi pose pekerja: hanya berasal dari status/mode engine (event nyata), bukan acak. */
-export function workerSpec(w, time, rm, seedMs, pers = personalityOf(w.name)) {
+export function workerSpec(w, time, rm, seedMs, pers = personalityOf(w.name), sleepy = 0) {
   const speaking = !rm && w.bubble && w.bubble.until > time && Math.floor(time * 8) % 2 === 0;
   const idle = idleBehavior(pers.idle);
   const quirk = pers.quirk ? QUIRKS[pers.quirk] : null;
@@ -253,7 +255,8 @@ export function workerSpec(w, time, rm, seedMs, pers = personalityOf(w.name)) {
     const moving = (w.mode === 'out' && w.rise <= 0) || w.mode === 'back';
     const spec = { dir: w.facing, pose: 'stand', moving, frame: walkFrame(w.walkDist), mouth: speaking, phones };
     if (w.mode === 'pantry' && w.stage === 'drink') {
-      spec.act = rm || Math.floor(time * 0.7) % 2 === 0 ? idle.pantry : null;
+      // malam/subuh: yang ke pantry selalu ngopi (hanya tampilan)
+      spec.act = rm || Math.floor(time * 0.7) % 2 === 0 ? (sleepy > 0 ? 'sip' : idle.pantry) : null;
     }
     return spec;
   }
@@ -272,6 +275,8 @@ export function workerSpec(w, time, rm, seedMs, pers = personalityOf(w.name)) {
     if (idle.seat === 'turn') spec.dir = 'up';
     else spec.act = idle.seat;
   }
+  // malam/subuh: sesekali menguap saat idle (hanya tampilan; mati saat reduced motion)
+  if (sleepy > 0 && w.status === 'idle' && !spec.act && spec.dir === 'down' && yawnPhase(time, seedMs, sleepy, rm) >= 0) spec.mouth = true;
   if (!rm && time < w.sendUntil) {
     spec.act = 'type';
     spec.typeFrame = Math.floor(time * 14) % 2 === 0;
@@ -447,7 +452,7 @@ function drawLabels(ctx, office) {
 
 // ------------------------------------------------------------------ public API
 
-export function createRenderer(canvas, { theme = 'dark', variant, clock = Date.now } = {}) {
+export function createRenderer(canvas, { theme = 'dark', variant, phase = null, clock = Date.now } = {}) {
   // Urutan pembuatan penting untuk test: pix, lalu bg. Canvas lain dibuat belakangan.
   const pix = document.createElement('canvas');
   pix.width = W;
@@ -463,6 +468,7 @@ export function createRenderer(canvas, { theme = 'dark', variant, clock = Date.n
   const ctx = canvas.getContext('2d');
   const sprites = createSpriteCache(() => document.createElement('canvas'));
   let sceneKey = '';
+  let look = null; // parameter visual fase hari aktif (daycycle.js PHASE_LOOK) atau null
   let prevBg = null; // latar tema sebelumnya, untuk transisi halus saat tema berganti
   let drawn = false;
   let rosterVersion = getState().version;
@@ -470,12 +476,13 @@ export function createRenderer(canvas, { theme = 'dark', variant, clock = Date.n
   let fadeFrom = null;
 
   /**
-   * Ganti tema kantor + varian waktu: palet, dekorasi, dan sprite berubah, cache latar di-reset dan digambar ulang.
-   * Tanpa perubahan (tema dan varian sama) tidak ada yang digambar ulang.
+   * Ganti tema kantor + varian waktu + fase hari (opsional, Fase 4): palet, dekorasi, dan sprite berubah, cache latar
+   * di-reset dan digambar ulang. Tanpa perubahan (tema, varian, dan fase sama) tidak ada yang digambar ulang.
    */
-  function setTheme(arg, v) {
+  function setTheme(arg, v, dayPhase = null) {
     const scene = resolveScene(arg, v);
-    const key = `${scene.theme.id}|${scene.variant}`;
+    const phaseLook = lookOf(dayPhase);
+    const key = `${scene.theme.id}|${scene.variant}|${phaseLook ? dayPhase : '-'}`;
     if (drawn && key === sceneKey) return;
     if (drawn) {
       prevBg ??= document.createElement('canvas');
@@ -489,10 +496,17 @@ export function createRenderer(canvas, { theme = 'dark', variant, clock = Date.n
     P = paletteForTheme(scene.theme, scene.variant);
     D = scene.theme.decor;
     SPRITES = scene.theme.sprites;
-    drawBackground(bg.getContext('2d'), P, D, SPRITES);
+    look = phaseLook;
+    paintBackground();
     drawn = true;
   }
-  setTheme(theme, variant);
+  /** Latar statis + cahaya fase (jendela, lampu) ke canvas offscreen. */
+  function paintBackground() {
+    const bctx = bg.getContext('2d');
+    drawBackground(bctx, P, D, SPRITES);
+    drawDayLight(bctx, look);
+  }
+  setTheme(theme, variant, phase);
 
   const figure = (look, role, shirt, spec, x, feetY, seated) => {
     const spr = sprites.get(look, role, shirt, P.outline, spec);
@@ -507,6 +521,7 @@ export function createRenderer(canvas, { theme = 'dark', variant, clock = Date.n
   function drawPixels(office, now) {
     const time = office.time;
     const rm = Boolean(office.reducedMotion);
+    const sleepy = look ? office.sleepy ?? 0 : 0;
     pctx.imageSmoothingEnabled = false;
     pctx.drawImage(bg, 0, 0);
     if (fade > 0 && prevBg && !rm) {
@@ -525,7 +540,7 @@ export function createRenderer(canvas, { theme = 'dark', variant, clock = Date.n
       const seedMs = (hash(w.name) % 4000) + 1;
       const seated = w.mode === 'seat';
       const pers = personalityOf(w.name);
-      const spec = workerSpec(w, time, rm, seedMs, pers);
+      const spec = workerSpec(w, time, rm, seedMs, pers, sleepy);
       const quirkOn = seated && (w.status === 'idle' || w.status === 'working');
       const tapping = quirkOn && !rm && Boolean(QUIRKS[pers.quirk]?.tap) && quirkPhase(time, seedMs, rm) >= 0;
       const skin = SKINS[look.skin % SKINS.length].s;
@@ -539,6 +554,10 @@ export function createRenderer(canvas, { theme = 'dark', variant, clock = Date.n
         });
         if (seated) drawHands(pctx, w.seat.x, w.desk.y, skin, time + w.seat.x, w.status === 'working' || time < w.sendUntil || tapping, rm);
         if (quirkOn) drawQuirkFx(pctx, pers.quirk, { x: w.seat.x, headY: w.seat.y - 17, desk: w.desk, time, seedMs, rm });
+        if (sleepy > 0 && seated && spec.mouth && w.status === 'idle') {
+          const yp = yawnPhase(time, seedMs, sleepy, rm);
+          if (yp >= 0) QUIRKS.yawn.draw(pctx, { x: w.seat.x, headY: w.seat.y - 17, desk: w.desk, phase: yp, time, ink: P.ink, soft: P.inkSoft });
+        }
       } });
     }
     const m = office.manager;
@@ -577,6 +596,11 @@ export function createRenderer(canvas, { theme = 'dark', variant, clock = Date.n
     } });
     items.sort((a, b) => a.y - b.y);
     for (const it of items) it.draw();
+    // tint fase hari: satu fillRect di atas seluruh kantor; label teks (lapisan layar) tidak ikut ter-tint
+    if (look && look.tint.alpha > 0) {
+      pctx.fillStyle = look.tint.css;
+      pctx.fillRect(0, 0, W, H);
+    }
 
     for (const w of office.workers.values()) drawStatusMarker(pctx, w, time, rm);
     if (office.limitWarning) drawWarningIcon(pctx, m.x + 12, m.y - 21); // di samping kepala, di bawah ekor bubble
@@ -595,7 +619,7 @@ export function createRenderer(canvas, { theme = 'dark', variant, clock = Date.n
     prevBg = null;
     fade = 0;
     fadeFrom = null;
-    drawBackground(bg.getContext('2d'), P, D, SPRITES);
+    paintBackground();
     labelKey = '';
   }
 

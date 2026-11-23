@@ -20,7 +20,7 @@ dan versi Inggris ada di [bagian English](README.md#english).
 - **Autostart** di Windows, macOS, dan Linux (opsional).
 - **Divisi buatan pengguna:** tambahkan divisi sebagai data biasa (JSON dan Markdown), dari kerangka kosong atau starter pack. Maksimal 12 divisi. Lihat [Divisi buatan pengguna](#divisi-buatan-pengguna).
 - **Kepribadian worker:** setiap worker bisa punya nama panggilan, gaya bicara dengan frasa di balon ucapan, kebiasaan idle, dan quirk kecil. Ini hanya untuk tampilan dasbor dan tidak pernah masuk ke prompt agen. Lihat [Kepribadian worker](docs/REFERENCE.id.md#kepribadian-worker).
-- **Tema kantor dan pengaturan:** lima tema kantor (Jakarta sebagai bawaan) dan panel Pengaturan untuk tema kantor, mode waktu, gerak, dan hujan. Tema hanya berupa data; tidak ada kode dari tema yang dijalankan. Lihat [Tema kantor dan pengaturan](docs/REFERENCE.id.md#tema-kantor-dan-pengaturan) dan [Membuat tema](CONTRIBUTING.md#creating-a-theme) (berbahasa Inggris).
+- **Tema kantor dan pengaturan:** lima tema kantor (Jakarta sebagai bawaan) dan panel Pengaturan untuk tema kantor, mode waktu, gerak, dan hujan. Kantor bisa mengikuti waktu nyata (subuh, pagi, siang, sore, malam) dengan tint warna, cahaya jendela, lampu yang menyala, dan pekerja yang ngantuk saat malam; pilih Otomatis, Manual (pilih fase), atau Mati. Tema hanya berupa data; tidak ada kode dari tema yang dijalankan. Lihat [Siklus siang-malam](docs/REFERENCE.id.md#siklus-siang-malam), [Tema kantor dan pengaturan](docs/REFERENCE.id.md#tema-kantor-dan-pengaturan) dan [Membuat tema](CONTRIBUTING.md#creating-a-theme) (berbahasa Inggris).
 
 ### Mulai cepat
 

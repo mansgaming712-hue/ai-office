@@ -539,6 +539,7 @@ The full list is in `COLOR_KEYS`, `ALPHA_KEYS`, and `NUMBER_KEYS` in `shared/the
 and character colours are the same in every theme (see the header of `src/office/palette.js`).
 
 `day` is used when the time mode shows the day look, and `night` for the night look. The two variants are independent.
+The day and night cycle (time mode `auto` or a phase) needs nothing extra in a theme: it picks `day` or `night` by phase and adds a thin tint, window light, and lamps on top (see [Day and night cycle](docs/REFERENCE.md#day-and-night-cycle)). Keep the label colours readable on both variants, because the phase tint lies on top of them.
 
 ### Decor vocabulary
 
@@ -615,7 +616,7 @@ npm start         # build, then run the server at http://localhost:3000
 ```
 
 Then open the dashboard, click **Settings**, and choose the theme in the office theme group. To see both looks, set the
-time mode to `day` and then `night`. If the theme does not appear, check the list of skipped themes in the same dialog.
+time mode to Manual and pick `siang` and then `malam` (or use Automatic). If the theme does not appear, check the list of skipped themes in the same dialog.
 
 ### Example
 

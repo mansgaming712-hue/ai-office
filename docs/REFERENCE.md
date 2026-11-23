@@ -629,7 +629,7 @@ Where the code is:
 
 - `themes/` (data), `shared/themes.js` (validator and limits)
 - `src/office/themeRegistry.js` (loads the themes at build time), `src/office/decor.js` (decoration drawing), `src/office/palette.js` (palettes and `CONTRAST_PAIRS`)
-- `src/settings.js` (settings store), `src/ui/SettingsDialog.jsx` (dialog)
+- `src/office/daycycle.js` (phases and their visuals), `src/settings.js` (settings store), `src/ui/SettingsDialog.jsx` (dialog)
 
 ### Themes
 
@@ -651,17 +651,47 @@ The settings are one JSON object in `localStorage` under `ai-office-settings` (s
 | Field | Values | Default | Meaning |
 | --- | --- | --- | --- |
 | `officeTheme` | a theme id | `jakarta` | The office theme. |
-| `timeMode` | `follow`, `day`, `night` | `follow` | `follow` uses the light or dark interface theme (light = day, dark = night). `day` and `night` fix the look. |
+| `timeMode` | `off`, `auto`, `subuh`, `pagi`, `siang`, `sore`, `malam` | `off` | `off` (Off) is the old behaviour: the office follows the light or dark interface theme (light = day, dark = night), with no tint or lamps. `auto` (Automatic) takes the phase from the browser's local clock. A phase name (Manual) locks that phase. See [Day and night cycle](#day-and-night-cycle). The old values `follow`, `day`, and `night` are still read and become `off`, `siang`, and `malam`. |
 | `motion` | `system`, `reduce`, `full` | `system` | `system` follows `prefers-reduced-motion`. `reduce` and `full` override it. |
 | `rain` | `true`, `false` | `false` | Rain in the office. The checkbox is off and disabled while reduced motion is on. The saved value is kept. |
 
 The root element gets `data-motion="reduce"` or `data-motion="full"`, and the attribute is removed for `system`.
 
+### Day and night cycle
+
+The time mode can colour the office by the time of day. The phase comes from the **local time of the browser**
+(the device's time zone), checked once a minute (and when the tab becomes visible again), never per frame.
+
+| Phase (`timeMode` value) | Local hours | Palette | Tint | Window light | Lamps | Team |
+| --- | --- | --- | --- | --- | --- | --- |
+| `subuh` (dawn) | 04:00-05:59 | night | indigo, 10% | pink-orange glass | on (90%) | sleepy (60%) |
+| `pagi` (morning) | 06:00-10:59 | day | pale yellow, 3% | pale yellow glass | off | normal |
+| `siang` (midday) | 11:00-14:59 | day | none | none (neutral daylight beam) | off | normal |
+| `sore` (afternoon) | 15:00-17:59 | day | orange, 5% | orange glass | on (50%) | normal |
+| `malam` (night) | 18:00-03:59 (past midnight) | night | navy, 8% | cool moon beam | on (100%) | sleepy (100%) |
+
+The Settings dialog offers three choices: **Off** (default, the old look), **Automatic** (real-time clock, with the
+current phase shown) and **Manual** (a list to pick one of the five phases). Notes:
+
+- Every theme works without any change. The phase picks the `day` or `night` palette of the theme (the palette column) and
+  adds a thin colour layer, window light, and lamps on top; the colours come from the phase, not from `theme.json`. A theme
+  does not need a new field, and an existing user theme keeps working.
+- The phase tints are kept thin so that every label still has at least 4.5:1 contrast on every theme; the tests check this.
+- When the phase is on, the background is cached per theme, variant, and phase. It is redrawn only when one of them
+  changes. The tint is a single rectangle per frame.
+- At night and dawn, idle workers sometimes yawn at their desk, now and then mutter a sleepy line, and go to the pantry
+  for coffee more often. This is display only: it never changes a status, the queue, or an event, and it uses seeded
+  randomness. With reduced motion there is no walking or yawning; the sleepy lines (text) still appear.
+- Old saved values still work: `follow` becomes `off`, `day` becomes `siang`, `night` becomes `malam`. The settings
+  version stays `1`. A user who had `night` now also sees the night tint and lamps.
+- For tests the clock is injected: `phaseAt(now)` and `watchPhase({ clock })` in `src/office/daycycle.js`, and
+  `resolvePhase(timeMode, { now })` and `resolveVariant(timeMode, { uiTheme, now })` in `src/settings.js`.
+
 ### localStorage keys
 
 | Key | Value | Owner | Notes |
 | --- | --- | --- | --- |
-| `ai-office-settings` | JSON, for example `{"v":1,"officeTheme":"jakarta","timeMode":"follow","motion":"system","rain":false}` | `src/settings.js` | `v` must be `1`. Unknown fields are dropped when saved. Values longer than 4096 characters, invalid JSON, or another `v` count as corrupt, and the defaults are used. |
+| `ai-office-settings` | JSON, for example `{"v":1,"officeTheme":"jakarta","timeMode":"off","motion":"system","rain":false}` | `src/settings.js` | `v` must be `1`. Unknown fields are dropped when saved. Values longer than 4096 characters, invalid JSON, or another `v` count as corrupt, and the defaults are used. |
 | `ai-office-rain` | `"1"` for rain on, anything else for off | `src/settings.js` (legacy) | Read only when `ai-office-settings` does not exist. It is then copied into the new key. The code does not delete it. If `ai-office-settings` exists but is corrupt, the defaults are used, `rain` still reads this key, and nothing is written. |
 | `ai-office-lang` | `en` or `id` | `src/i18n.js` | Interface language. Read before the first render. Not part of the settings object. |
 | `ai-office-theme` | `dark` or `light` | `src/theme.js` and `public/theme-init.js` | Light or dark interface theme, separate from the office theme. If it is missing or invalid, the system preference is used, and an unknown preference means `dark`. |
@@ -669,7 +699,7 @@ The root element gets `data-motion="reduce"` or `data-motion="full"`, and the at
 All storage access is wrapped in `try`/`catch`. If storage is blocked or full, changes still apply in memory until the
 page is reloaded.
 
-Identifiers in this section (theme ids, `follow`, `day`, `night`, `system`, `reduce`, `full`, and the key names) are the
+Identifiers in this section (theme ids, `off`, `auto`, `subuh`, `pagi`, `siang`, `sore`, `malam`, `system`, `reduce`, `full`, and the key names) are the
 same in the English and Indonesian reference.
 
 ## Tests and checks

@@ -44,10 +44,14 @@ export const TUNING = {
   phraseFirst: [20, 40], // jeda sebelum frasa kepribadian pertama (detik, acak deterministik)
   phraseEvery: [25, 55], // jeda antar frasa kepribadian
   phraseFor: 3, // lama bubble frasa
+  sleepyEvery: [30, 60], // jeda antar celetukan ngantuk saat malam (detik, dibagi tingkat ngantuk)
+  sleepyGapCut: 0.4, // pada ngantuk penuh, jeda perjalanan pantry (kopi) dipotong sebesar ini
 };
 
 // Obrolan santai di pantry (hanya agen yang benar-benar idle). Kunci office.chat.1..N di locales.
 export const CHAT_LINES = 6;
+// Celetukan ngantuk di malam/subuh (hanya agen idle). Kunci office.sleepy.1..N di locales.
+export const SLEEPY_LINES = 4;
 
 /** Pengacak kecil berbiji tetap (mulberry32): perilaku idle dapat diulang dan dites. */
 function makeRng(seed) {
@@ -82,7 +86,10 @@ export class Office {
     this.rng = this.opts.rng ?? makeRng(seed);
     this.prng = this.opts.rng ?? makeRng(seed ^ 0x9e3779b9); // aliran terpisah: kepribadian tidak mengubah urutan perilaku pantry
     this.pantryTimer = this.#range(TUNING.pantryFirst);
+    this.srng = this.opts.rng ?? makeRng(seed ^ 0x2545f491); // aliran ketiga: celetukan ngantuk tidak menggeser aliran lain
     this.chatTimer = 0;
+    this.sleepy = this.sleepy ?? 0; // 0..1, dari fase hari (setSleepy); dipertahankan saat reset
+    this.sleepyIn = null;
     this.rainOn = this.rainOn ?? false; // pilihan pengguna (tombol hujan) dipertahankan saat reset
     this.rainLevel = this.rainLevel ?? 0;
     this.reducedMotion = this.reducedMotion ?? false;
@@ -233,6 +240,17 @@ export class Office {
   setReducedMotion(on) {
     this.reducedMotion = Boolean(on);
     if (this.reducedMotion) for (const w of this.workers.values()) this.#snapToSeat(w); // tanpa jalan-jalan idle
+  }
+
+  /**
+   * Tingkat ngantuk 0..1 dari fase hari (malam/subuh). HANYA tampilan: idle lebih sering ke pantry (kopi), sesekali
+   * menguap (renderer) dan bergumam ngantuk (bubble ambient). Tidak mengubah status, antrean, atau event.
+   * 0 = tidak ada efek (aliran RNG persis seperti sebelum fitur ini).
+   */
+  setSleepy(level) {
+    const v = Number.isFinite(level) ? clamp(level, 0, 1) : 0;
+    if (v !== this.sleepy) this.sleepyIn = null;
+    this.sleepy = v;
   }
 
   /** Hujan di jendela (dekoratif, pilihan pengguna). Berfade halus; reduced motion = tidak digambar. */
@@ -490,13 +508,16 @@ export class Office {
     if (!reduced) {
       this.pantryTimer -= dt;
       if (this.pantryTimer <= 0) {
-        this.pantryTimer = this.#range(TUNING.pantryGap);
-        // hanya yang kebiasaan idle-nya berjalan ke pantry (kopi, air, camilan, tanaman, ngobrol); netral = kopi
-        const calm = [...this.workers.values()].filter((w) => this.#isCalm(w) && !w.dynamic && idleBehavior(this.personality(w.name).idle).trip);
+        const gap = this.#range(TUNING.pantryGap);
+        this.pantryTimer = this.sleepy > 0 ? gap * (1 - TUNING.sleepyGapCut * this.sleepy) : gap; // ngantuk: lebih sering ngopi
+        // hanya yang kebiasaan idle-nya berjalan ke pantry (kopi, air, camilan, tanaman, ngobrol); netral = kopi.
+        // Saat ngantuk semua agen idle butuh kopi.
+        const calm = [...this.workers.values()].filter((w) => this.#isCalm(w) && !w.dynamic && (this.sleepy > 0 || idleBehavior(this.personality(w.name).idle).trip));
         if (calm.length && away.length < TUNING.maxAway) this.#startTrip(calm[Math.floor(this.rng() * calm.length)]);
       }
     }
     this.#updatePhrases(dt);
+    this.#updateSleepy(dt);
     for (const w of away) {
       if (w.mode === 'out' || w.mode === 'back') {
         if (w.mode === 'out' && w.rise > 0) {
@@ -553,6 +574,21 @@ export class Office {
         if (!speaker.bubble) speaker.bubble = this.#bubble(t(`office.chat.${n}`), 'chat', 2.2);
       }
     }
+  }
+
+  #updateSleepy(dt) {
+    if (!(this.sleepy > 0)) return;
+    const next = () => (TUNING.sleepyEvery[0] + this.srng() * (TUNING.sleepyEvery[1] - TUNING.sleepyEvery[0])) / this.sleepy;
+    this.sleepyIn ??= next();
+    this.sleepyIn -= dt;
+    if (this.sleepyIn > 0) return;
+    this.sleepyIn = next();
+    const calm = [...this.workers.values()].filter((w) => this.#isCalm(w) && !w.bubble && !w.dynamic);
+    if (!calm.length) return;
+    const w = calm[Math.floor(this.srng() * calm.length)];
+    const n = 1 + Math.floor(this.srng() * SLEEPY_LINES);
+    w.bubble = this.#bubble(t(`office.sleepy.${n}`), 'chat', 2.4);
+    if (w.bubble) w.bubble.ambient = true;
   }
 
   #prange([a, b]) {

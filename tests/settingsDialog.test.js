@@ -8,8 +8,9 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getLang, hasKey, setLang, t } from '../src/i18n.js';
 import { registry } from '../src/office/themeRegistry.js';
-import { DEFAULT_SETTINGS, MOTION_MODES, TIME_MODES } from '../src/settings.js';
-import SettingsDialog from '../src/ui/SettingsDialog.jsx';
+import { PHASES } from '../src/office/daycycle.js';
+import { DEFAULT_SETTINGS, MOTION_MODES, SETTINGS_KEY, createSettingsStore, loadSettings } from '../src/settings.js';
+import SettingsDialog, { TIME_CHOICES, phaseRange, timeChoiceOf, timeModeForChoice } from '../src/ui/SettingsDialog.jsx';
 import { FOCUSABLE, createKeyHandler, focusableIn, isEscape, isTab, trapTarget } from '../src/ui/dialogA11y.js';
 
 const SRC = new URL('../src/', import.meta.url);
@@ -56,19 +57,19 @@ describe('markup dialog', () => {
     expect(html).toMatch(/<legend>Waktu di kantor<\/legend>/);
     expect(html).toMatch(/<legend>Gerak<\/legend>/);
     const radios = html.match(/<input type="radio"[^>]*>/g);
-    expect(radios).toHaveLength(registry.themes.length + 2 + TIME_MODES.length + MOTION_MODES.length);
+    expect(radios).toHaveLength(registry.themes.length + 2 + TIME_CHOICES.length + MOTION_MODES.length);
     // setiap input dibungkus <label> (label implisit): jumlah label >= jumlah radio + 1 checkbox
     expect((html.match(/<label/g) ?? []).length).toBe(radios.length + 1);
     for (const r of radios) expect(r).toMatch(/name="[a-z-]+"/);
   });
 
-  it('pilihan saat ini ditandai checked sesuai pengaturan (bawaan: jakarta, ikuti tema, ikuti sistem)', () => {
+  it('pilihan saat ini ditandai checked sesuai pengaturan (bawaan: jakarta, waktu mati, ikuti sistem)', () => {
     const html = render();
     const checked = (html.match(/<input type="radio"[^>]*checked[^>]*>/g) ?? []).map((x) => /value="([^"]+)"/.exec(x)[1]);
-    expect(checked.sort()).toEqual(['follow', 'id', 'jakarta', 'system']);
-    const html2 = render({ settings: { ...DEFAULT_SETTINGS, officeTheme: 'kafe', timeMode: 'night', motion: 'reduce' }, lang: 'en' }, 'en');
+    expect(checked.sort()).toEqual(['id', 'jakarta', 'off', 'system']);
+    const html2 = render({ settings: { ...DEFAULT_SETTINGS, officeTheme: 'kafe', timeMode: 'auto', motion: 'reduce' }, lang: 'en' }, 'en');
     const checked2 = (html2.match(/<input type="radio"[^>]*checked[^>]*>/g) ?? []).map((x) => /value="([^"]+)"/.exec(x)[1]);
-    expect(checked2.sort()).toEqual(['en', 'kafe', 'night', 'reduce']);
+    expect(checked2.sort()).toEqual(['auto', 'en', 'kafe', 'reduce']);
   });
 
   it('daftar tema memuat semua tema bawaan dengan nama menurut bahasa dan penanda bawaan', () => {
@@ -93,16 +94,16 @@ describe('markup dialog', () => {
 
   it('teks mode waktu dan gerak sesuai spesifikasi, di dua bahasa', () => {
     const id = render();
-    expect(id).toContain('Ikuti tema terang/gelap (bawaan)');
-    expect(id).toContain('Selalu siang');
-    expect(id).toContain('Selalu malam');
+    expect(id).toContain('Mati: ikuti tema terang/gelap (bawaan)');
+    expect(id).toContain('Otomatis: jam real-time');
+    expect(id).toContain('Manual: pilih fase');
     expect(id).toContain('Ikuti sistem (bawaan)');
     expect(id).toContain('Kurangi gerak');
     expect(id).toContain('Gerak penuh');
     const en = render({ lang: 'en' }, 'en');
-    expect(en).toContain('Follow light/dark theme (default)');
-    expect(en).toContain('Always day');
-    expect(en).toContain('Always night');
+    expect(en).toContain('Off: follow light/dark theme (default)');
+    expect(en).toContain('Automatic: real-time clock');
+    expect(en).toContain('Manual: pick a phase');
     expect(en).toContain('Follow system (default)');
     expect(en).toContain('Reduce motion');
     expect(en).toContain('Full motion');
@@ -147,6 +148,78 @@ describe('markup dialog', () => {
     const html = render({ themes: [registry.defaultTheme, evil] });
     expect(html).not.toContain('<b>x</b>');
     expect(html).not.toContain('<script>');
+  });
+});
+
+describe('siklus siang-malam (Fase 4): Otomatis / Manual + fase / Mati', () => {
+  const checkedOf = (html) => (html.match(/<input type="radio"[^>]*checked[^>]*>/g) ?? []).map((x) => /value="([^"]+)"/.exec(x)[1]);
+
+  it('tiga pilihan mode (off, auto, manual) dengan label EN dan ID; bawaan = Mati', () => {
+    expect(TIME_CHOICES).toEqual(['off', 'auto', 'manual']);
+    const id = render();
+    const radios = (id.match(/<input type="radio" name="time-mode"[^>]*>/g) ?? []).map((x) => /value="([^"]+)"/.exec(x)[1]);
+    expect(radios).toEqual(['off', 'auto', 'manual']);
+    expect(checkedOf(id)).toContain('off');
+    expect(id).not.toContain('<select'); // Mati: tanpa pemilih fase
+  });
+
+  it('Otomatis: menampilkan fase aktif (role=status) dan batas jam; tanpa pemilih fase', () => {
+    const id = render({ settings: { ...DEFAULT_SETTINGS, timeMode: 'auto' }, livePhase: 'malam' });
+    expect(checkedOf(id)).toContain('auto');
+    expect(id).toMatch(/<p class="set-note" role="status">Sekarang: Malam<\/p>/);
+    expect(id).toContain('Fase mengikuti jam lokal');
+    expect(id).not.toContain('<select');
+    const en = render({ settings: { ...DEFAULT_SETTINGS, timeMode: 'auto' }, livePhase: 'sore', lang: 'en' }, 'en');
+    expect(en).toContain('Now: Afternoon');
+    expect(en).toContain('Phases follow this device');
+  });
+
+  it('Manual: daftar pilih fase (label terhubung via for/id) memuat lima fase dengan jamnya; fase tersimpan terpilih', () => {
+    const html = render({ settings: { ...DEFAULT_SETTINGS, timeMode: 'sore' } });
+    expect(checkedOf(html)).toContain('manual');
+    const sel = /<label class="set-select" for="([^"]+)"><span>Fase<\/span><select id="\1"/.exec(html);
+    expect(sel).not.toBeNull();
+    const opts = html.match(/<option [^>]*>[^<]*<\/option>/g);
+    expect(opts).toHaveLength(5);
+    expect(opts.map((o) => /value="([^"]+)"/.exec(o)[1])).toEqual(PHASES);
+    expect(html).toMatch(/<option value="sore" selected="">Sore \(15:00-17:59\)<\/option>/);
+    expect(html).toContain('Malam (18:00-03:59)');
+    expect(html).toContain('Subuh (04:00-05:59)');
+    expect(render({ settings: { ...DEFAULT_SETTINGS, timeMode: 'pagi' }, lang: 'en' }, 'en')).toContain('Morning (06:00-10:59)');
+  });
+
+  it('phaseRange sesuai batas jam di daycycle (selesai = jam mulai fase berikutnya - 1 menit)', () => {
+    expect(PHASES.map(phaseRange)).toEqual(['04:00-05:59', '06:00-10:59', '11:00-14:59', '15:00-17:59', '18:00-03:59']);
+  });
+
+  it('pilihan UI ↔ nilai tersimpan: manual mulai dari fase yang sedang tampil, atau siang', () => {
+    expect(['off', 'auto', ...PHASES, 'rusak', undefined].map(timeChoiceOf)).toEqual(['off', 'auto', ...Array(5).fill('manual'), 'off', 'off']);
+    expect(timeModeForChoice('off')).toBe('off');
+    expect(timeModeForChoice('auto', 'malam')).toBe('auto');
+    expect(timeModeForChoice('manual', 'malam')).toBe('malam');
+    expect(timeModeForChoice('manual')).toBe('siang');
+    expect(timeModeForChoice('manual', 'toString')).toBe('siang');
+  });
+
+  it('memilih opsi menyimpan pilihan ke storage dan dimuat lagi', () => {
+    const m = new Map();
+    const storage = { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => void m.set(k, v) };
+    const store = createSettingsStore(storage);
+    store.set({ timeMode: timeModeForChoice('auto') });
+    expect(loadSettings(storage).settings.timeMode).toBe('auto');
+    store.set({ timeMode: timeModeForChoice('manual', 'subuh') });
+    expect(JSON.parse(m.get(SETTINGS_KEY)).timeMode).toBe('subuh');
+    store.set({ timeMode: 'pagi' }); // dari pemilih fase
+    expect(loadSettings(storage).settings.timeMode).toBe('pagi');
+    store.set({ timeMode: timeModeForChoice('off') });
+    expect(loadSettings(storage).settings.timeMode).toBe('off');
+  });
+
+  it('kode dialog: pemilih fase memakai <label htmlFor> + <select>, tanpa teks literal', () => {
+    const code = read('ui/SettingsDialog.jsx');
+    expect(code).toMatch(/htmlFor=\{phaseId\}/);
+    expect(code).toMatch(/<select id=\{phaseId\}/);
+    expect(code).not.toMatch(/>\s*(Subuh|Pagi|Siang|Sore|Malam|Dawn|Morning|Night)\s*</);
   });
 });
 
@@ -268,7 +341,8 @@ describe('jebakan fokus dan Esc', () => {
 describe('teks (i18n) dan kepatuhan', () => {
   const KEYS = [
     'open', 'title', 'close', 'intro', 'theme', 'lang', 'time', 'motion', 'rain', 'rainOff', 'reset', 'done', 'skipped', 'skippedNote',
-    ...TIME_MODES.map((m) => `time.${m}`), ...MOTION_MODES.map((m) => `motion.${m}`),
+    ...TIME_CHOICES.map((m) => `time.${m}`), 'time.phase', 'time.now', 'time.hours', ...PHASES.map((p) => `phase.${p}`),
+    ...MOTION_MODES.map((m) => `motion.${m}`),
   ];
 
   it.each(KEYS)('ui.settings.%s ada dan berbeda dari kuncinya di en dan id', (k) => {

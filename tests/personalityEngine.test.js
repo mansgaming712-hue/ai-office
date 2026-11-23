@@ -398,5 +398,5 @@ describe('waktu frame (update + draw) dengan 19 karakter', () => {
     const neutral = count(() => NEUTRAL_PERSONALITY);
     expect(withPersonality).toBeLessThan(neutral * 1.6);
     expect(withPersonality).toBeLessThan(700); // canvas 16x24 kecil; 19 karakter x pose
-  });
+  }, 60_000); // 2 x 14.400 frame: ini menghitung varian cache, bukan mengukur waktu; 15 dtk bawaan terlalu ketat di mesin sibuk
 });

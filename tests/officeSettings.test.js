@@ -25,8 +25,8 @@ const throwing = () => ({
 const stored = (o) => JSON.stringify({ v: SETTINGS_VERSION, ...o });
 
 describe('bawaan', () => {
-  it('bawaan = tampilan sekarang: jakarta, ikuti tema UI, gerak ikuti sistem, tanpa hujan', () => {
-    expect(DEFAULT_SETTINGS).toEqual({ v: 1, officeTheme: 'jakarta', timeMode: 'follow', motion: 'system', rain: false });
+  it('bawaan = tampilan lama: jakarta, siklus waktu mati (ikuti tema UI), gerak ikuti sistem, tanpa hujan', () => {
+    expect(DEFAULT_SETTINGS).toEqual({ v: 1, officeTheme: 'jakarta', timeMode: 'off', motion: 'system', rain: false });
     expect(Object.isFrozen(DEFAULT_SETTINGS)).toBe(true);
     expect(SETTINGS_KEY).toBe('ai-office-settings');
   });
@@ -46,7 +46,7 @@ describe('bawaan', () => {
 describe('simpan dan muat', () => {
   it('simpan lalu muat mengembalikan nilai yang sama, dalam satu kunci berversi', () => {
     const s = memStorage();
-    const value = { v: 1, officeTheme: 'kafe', timeMode: 'night', motion: 'reduce', rain: true };
+    const value = { v: 1, officeTheme: 'kafe', timeMode: 'malam', motion: 'reduce', rain: true };
     expect(saveSettings(s, value)).toBe(true);
     expect(Object.keys(s.dump())).toEqual([SETTINGS_KEY]);
     expect(JSON.parse(s.dump()[SETTINGS_KEY])).toEqual(value);
@@ -59,7 +59,7 @@ describe('simpan dan muat', () => {
   });
 
   it('kolom yang rusak jatuh ke bawaan satu per satu, kolom lain dipertahankan', () => {
-    const s = memStorage({ [SETTINGS_KEY]: stored({ officeTheme: 'KAFE!', timeMode: 'malam', motion: 'reduce', rain: 'ya' }) });
+    const s = memStorage({ [SETTINGS_KEY]: stored({ officeTheme: 'KAFE!', timeMode: 'tengah-malam', motion: 'reduce', rain: 'ya' }) });
     expect(loadSettings(s).settings).toEqual({ ...DEFAULT_SETTINGS, motion: 'reduce' });
   });
 
@@ -103,9 +103,10 @@ describe('JSON rusak dan nilai tak terduga', () => {
     expect({}.polluted).toBeUndefined();
   });
 
-  it('mode waktu tak dikenal ditolak; mode baru bisa diizinkan lewat daftar (Fase 4)', () => {
-    expect(sanitizeSettings({ timeMode: 'auto' }).timeMode).toBe('follow');
-    expect(sanitizeSettings({ timeMode: 'auto' }, { timeModes: [...TIME_MODES, 'auto'] }).timeMode).toBe('auto');
+  it('mode waktu tak dikenal ditolak; mode baru bisa diizinkan lewat daftar', () => {
+    expect(sanitizeSettings({ timeMode: 'tengah-malam' }).timeMode).toBe('off');
+    expect(sanitizeSettings({ timeMode: 'tengah-malam' }, { timeModes: [...TIME_MODES, 'tengah-malam'] }).timeMode).toBe('tengah-malam');
+    for (const bad of [5, null, {}, [], '', '__proto__', 'constructor', 'toString']) expect(sanitizeSettings({ timeMode: bad }).timeMode).toBe('off');
   });
 });
 
@@ -164,7 +165,7 @@ describe('migrasi kunci lama', () => {
   it('bahasa dan tema UI tetap di kunci lamanya (tidak disentuh pengaturan baru)', () => {
     const s = memStorage({ [LANG_STORAGE_KEY]: 'id', [THEME_KEY]: 'light' });
     const store = createSettingsStore(s);
-    store.set({ officeTheme: 'kafe', timeMode: 'day', motion: 'full', rain: true });
+    store.set({ officeTheme: 'kafe', timeMode: 'sore', motion: 'full', rain: true });
     expect(s.dump()[LANG_STORAGE_KEY]).toBe('id');
     expect(s.dump()[THEME_KEY]).toBe('light');
     expect(Object.keys(s.dump()).sort()).toEqual([LANG_STORAGE_KEY, SETTINGS_KEY, THEME_KEY].sort());
@@ -218,28 +219,25 @@ describe('store', () => {
 });
 
 describe('mode waktu diterapkan', () => {
-  it('ikuti tema terang/gelap UI (bawaan): terang → siang, gelap → malam', () => {
-    expect(resolveVariant('follow', { uiTheme: 'light' })).toBe('day');
-    expect(resolveVariant('follow', { uiTheme: 'dark' })).toBe('night');
+  it('Mati (bawaan): ikuti tema terang/gelap UI, terang → siang, gelap → malam', () => {
+    expect(resolveVariant('off', { uiTheme: 'light' })).toBe('day');
+    expect(resolveVariant('off', { uiTheme: 'dark' })).toBe('night');
   });
 
-  it('selalu siang / selalu malam mengabaikan tema UI', () => {
-    for (const ui of ['light', 'dark']) {
-      expect(resolveVariant('day', { uiTheme: ui })).toBe('day');
-      expect(resolveVariant('night', { uiTheme: ui })).toBe('night');
-    }
+  it('manual: fase mengunci varian dan mengabaikan tema UI', () => {
+    const want = { subuh: 'night', pagi: 'day', siang: 'day', sore: 'day', malam: 'night' };
+    for (const ui of ['light', 'dark']) for (const [p, v] of Object.entries(want)) expect(resolveVariant(p, { uiTheme: ui })).toBe(v);
   });
 
   it('mode tak dikenal jatuh ke "ikuti tema UI"', () => {
-    expect(resolveVariant('auto', { uiTheme: 'light' })).toBe('day');
+    expect(resolveVariant('tengah-malam', { uiTheme: 'light' })).toBe('day');
     expect(resolveVariant(undefined, { uiTheme: 'dark' })).toBe('night');
+    expect(resolveVariant('toString', { uiTheme: 'light' })).toBe('day');
   });
 
-  it('setiap mode terdaftar punya penentu; diperluas dengan menambah penentu berbasis jam (Fase 4) tanpa mengubah model', () => {
+  it('setiap mode terdaftar punya penentu varian', () => {
     expect([...TIME_MODES]).toEqual(Object.keys(TIME_RESOLVERS));
-    const resolvers = { ...TIME_RESOLVERS, auto: ({ now }) => (new Date(now).getHours() >= 18 ? 'night' : 'day') };
-    expect(resolvers.auto({ now: new Date(2026, 0, 1, 20).getTime() })).toBe('night');
-    expect(resolvers.auto({ now: new Date(2026, 0, 1, 9).getTime() })).toBe('day');
+    expect([...TIME_MODES]).toEqual(['off', 'auto', 'subuh', 'pagi', 'siang', 'sore', 'malam']);
   });
 
   it('jam disuntik ke penentu (parameter now), tidak dibaca dari global', () => {
@@ -255,7 +253,7 @@ describe('mode waktu diterapkan', () => {
   it('perubahan mode waktu di store mengubah varian yang dihitung', () => {
     const store = createSettingsStore(memStorage());
     expect(resolveVariant(store.get().timeMode, { uiTheme: 'dark' })).toBe('night');
-    store.set({ timeMode: 'day' });
+    store.set({ timeMode: 'siang' });
     expect(resolveVariant(store.get().timeMode, { uiTheme: 'dark' })).toBe('day');
   });
 });
