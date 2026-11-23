@@ -527,7 +527,7 @@ division zone on the floor) and `zoneEdge`.
 Keys to start with:
 
 - Floor and wall: `floor`, `floorLine`, `floorTick`, `wall`, `wallBase`, `wallBaseHi`
-- Text: `ink`, `inkSoft`, `onRug`, `onDoor`, `onTray`
+- Text: `ink`, `inkSoft`, `onRug`, `onDoor`, `onTray` (`onDoor` is checked on `doorPanel`, but since the CEO has their own room no label is drawn on the entrance door; keep it readable anyway)
 - Bubbles, posters, and signs: `bubblePaper`, `bubbleInk`, `bubbleTag`, `bubbleWarn`, `bubbleWarnInk`, `posterPaper`,
   `posterInk`, `signPaper`, `signInk`
 - Furniture and rugs: `deskTop`, `deskFront`, `rugA`, `rugB`, `trayIn`, `counterTop`, `tableTop`, `outline`
@@ -566,11 +566,19 @@ Prop slots (`PROP_SLOTS` in `shared/themes.js`, positions in `PROP_ANCHORS` in `
 
 | Slot | Point on the canvas | Anchor |
 | --- | --- | --- |
-| `wall-left` | x 26, y 16 | `center`: the sprite is centred on the point (wall above the CEO door) |
+| `wall-left` | x 26, y 16 | `center`: the sprite is centred on the point (wall above the entrance door) |
 | `floor-left` | x 30, y 126 | `bottom`: the sprite stands on the point (floor left, below the door) |
 | `floor-center` | x 240, y 128 | `bottom`: the sprite stands on the point (floor below the manager rug) |
 
 There are only three slots, so a theme shows at most three props.
+
+The CEO room (glass-walled room with the CEO desk, a bookshelf, a coffee table, and a plant) needs **no new theme field**. It
+is drawn with colours that already exist in the palette: `meetFloor` and `meetFloorLine` (floor), `rugA`, `rugB`, and `rugStitch`
+(rug), `deskFront` and `deskFrontLo` (bookshelf), `counterTop` and `counterFront` (coffee table), `glassWall`, `glassFrame`, and
+`glassSheen` (glass walls), `doorFrame`, `door`, and `doorPanel` (door), `signPaper` and `signInk` (the "CEO" signs), and the
+`accentA`, `accentB`, and `accentC` colours for the books. So every theme, including your own, gets a matching CEO room, the
+day and night variants, and the lamp light of the day and night cycle. The name label sits on the rug (`onRug` on `rugA`/`rugB`),
+the signs use `signInk` on `signPaper`; both are already in the contrast rule below.
 
 ### Sprites
 

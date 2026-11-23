@@ -21,13 +21,13 @@ const disc = (ctx, cx, cy, r, color) => {
 
 const WALL_BODY = WALL_H - 4; // tinggi dinding di atas lis bawah
 const SKY_X0 = WINDOWS[0].x;
-const SKY_X1 = WINDOWS[1].x + WINDOWS[1].w;
+const SKY_X1 = WINDOWS.at(-1).x + WINDOWS.at(-1).w;
 const SKY_TOP = WINDOWS[0].y;
 const GROUND = WINDOWS[0].y + WINDOWS[0].h - 4;
 
 /** Titik pasang sprite props: pusat (center) atau tengah-bawah (bottom). Harus sama dengan PROP_SLOTS di shared/themes.js. */
 export const PROP_ANCHORS = Object.freeze({
-  'wall-left': { x: 26, y: 16, anchor: 'center' }, // dinding di atas pintu CEO
+  'wall-left': { x: 26, y: 16, anchor: 'center' }, // dinding di atas pintu masuk
   'floor-left': { x: 30, y: 126, anchor: 'bottom' }, // lantai kiri, di bawah pintu
   'floor-center': { x: 240, y: 128, anchor: 'bottom' }, // lantai di bawah karpet manajer
 });
@@ -122,7 +122,7 @@ export function drawLights(ctx, P, style) {
     rect(ctx, 0, WALL_H - 9, W, 1, rgbaOf(P.accentA, 0.3));
     rect(ctx, 0, WALL_H - 11, W, 1, rgbaOf(P.accentA, 0.3));
   } else if (style === 'pendant') {
-    for (const x of [46, 178, 238, 304, 438]) {
+    for (const x of [46, 178, 238, 304, 438, 560]) {
       rect(ctx, x, 0, 1, 3, P.outline);
       rect(ctx, x - 4, 3, 9, 2, P.accentA);
       rect(ctx, x - 3, 5, 7, 1, P.accentC);

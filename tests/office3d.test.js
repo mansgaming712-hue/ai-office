@@ -196,7 +196,7 @@ describe('engine: nama proyek sesi', () => {
     });
     expect(seen).toMatchObject({ text: 'Model kemasan', project: 'kopiku-3d' });
     o.handleEvent(ev('assign', 'ceo', 'manager', 'Proyek baru', { project: 'ai-office' }));
-    run(o, 2.5);
+    run(o, 6); // CEO berjalan dari ruangannya ke meja manajer dulu
     expect(o.manager.bubble).toMatchObject({ text: 'Proyek baru', kind: 'command', project: 'ai-office' });
   });
 });

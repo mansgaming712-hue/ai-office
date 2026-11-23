@@ -13,7 +13,7 @@ import { characterName, deskLabel, lookFor, shirtOf, SKINS } from './characters.
 import { lookOf } from './daycycle.js';
 import { STATUS_LABEL } from './engine.js';
 import {
-  DOOR, FOOT, MANAGER_SPOT, MEETING, PANTRY, H, W, WALL_ITEMS, zoneList,
+  CEO_ROOM, FOOT, MANAGER_SPOT, MEETING, PANTRY, H, W, WALL_ITEMS, zoneList,
 } from './layout.js';
 import { paletteForTheme, variantOfUiTheme } from './palette.js';
 import { QUIRKS, idleBehavior, idleSeatSeconds, quirkPhase, yawnPhase } from './quirks.js';
@@ -93,7 +93,7 @@ function drawChair(ctx, x, y, big = false) {
   rect(ctx, x - w / 2 + 1, top + 2, 1, 8, big ? P.chairBigHi : P.chairAHi);
 }
 
-function drawDesk(ctx, d, { status, t: time, color, big = false, reduced = false, laptopX, seed = 0, flash = false }) {
+function drawDesk(ctx, d, { status, t: time, color, big = false, reduced = false, laptopX, seed = 0, flash = false, tray = MANAGER_SPOT.inbox }) {
   rect(ctx, d.x, d.y, d.w, d.h, P.deskTop);
   rect(ctx, d.x, d.y, d.w, 1, P.deskTopHi);
   rect(ctx, d.x, d.y + d.h - 4, d.w, 4, P.deskFront);
@@ -145,8 +145,8 @@ function drawDesk(ctx, d, { status, t: time, color, big = false, reduced = false
   }
   if (big) {
     // baki surat masuk
-    rect(ctx, MANAGER_SPOT.inbox.x - 6, MANAGER_SPOT.inbox.y - 2, 12, 6, P.tray);
-    rect(ctx, MANAGER_SPOT.inbox.x - 5, MANAGER_SPOT.inbox.y - 1, 10, 4, P.trayIn);
+    rect(ctx, tray.x - 6, tray.y - 2, 12, 6, P.tray);
+    rect(ctx, tray.x - 5, tray.y - 1, 10, 4, P.trayIn);
   }
   // LED status
   if (status) rect(ctx, d.x + d.w - 4, d.y + d.h - 3, 2, 2, STATUS_COLOR[status]);
@@ -437,11 +437,16 @@ function drawLabels(ctx, office) {
   ctx.font = `8px ${FONT}`;
   ctx.fillStyle = P.onRug;
   ctx.fillText(`${characterName(MANAGER_ID)} · ${t('office.label.manager')}`, MANAGER_SPOT.seat.x, MANAGER_SPOT.desk.y + MANAGER_SPOT.desk.h + 8);
-  ctx.fillStyle = P.onDoor;
+  // Ruang CEO: plakat di kaca depan, papan nama di meja, dan nama + peran di karpet (statis, di meja CEO)
   ctx.font = `7px ${FONT}`;
-  ctx.fillText(t('office.label.ceo'), DOOR.x + DOOR.w / 2, DOOR.y + 9);
-  ctx.fillStyle = P.ink;
-  ctx.fillText(characterName(CEO_ID), office.ceo.x, office.ceo.y + FOOT + 9);
+  ctx.fillStyle = P.signInk;
+  const sg = CEO_ROOM.sign;
+  const pl = CEO_ROOM.plate;
+  ctx.fillText(t('office.label.ceo'), sg.x + sg.w / 2, sg.y + 6.5);
+  ctx.fillText(t('office.label.ceo'), pl.x + pl.w / 2, pl.y + 5);
+  ctx.font = `8px ${FONT}`;
+  ctx.fillStyle = P.onRug;
+  ctx.fillText(`${characterName(CEO_ID)} · ${t('office.label.ceo')}`, CEO_ROOM.seat.x, CEO_ROOM.desk.y + CEO_ROOM.desk.h + 8);
   if (office.inbox > 0) {
     ctx.fillStyle = P.onTray;
     ctx.font = `7px ${FONT}`;
@@ -583,16 +588,39 @@ export function createRenderer(canvas, { theme = 'dark', variant, phase = null, 
       if (mSeated) drawHands(pctx, m.x, MANAGER_SPOT.desk.y, SKINS[mLook.skin].s, time, office.manager.typingUntil > time, rm);
       if (mSeated && office.manager.typingUntil <= time) drawQuirkFx(pctx, mPers.quirk, { x: m.x, headY: m.y - 17, desk: MANAGER_SPOT.desk, time, seedMs: 777, rm });
     } });
-    // CEO: berdiri di dekat pintu
+    // CEO: duduk di meja ruang CEO; berdiri dan berjalan saat mengantar tugas, minum kopi, atau melihat jendela
     const c = office.ceo;
     const cLook = lookFor(CEO_ID);
     const cPers = personalityOf(CEO_ID);
-    const cSpec = { dir: 'down', pose: 'stand', moving: false, frame: 0, mouth: !rm && Boolean(c.bubble) && Math.floor(time * 8) % 2 === 0, phones: Boolean(QUIRKS[cPers.quirk]?.phones) };
-    if (!rm && time < c.giveUntil) cSpec.act = 'give';
-    else if (!rm && time < c.cheerUntil) cSpec.act = 'wave';
-    items.push({ y: c.y + FOOT, draw: () => {
-      figure(cLook, 'ceo', '#26304f', cSpec, c.x, c.y + FOOT, false);
-      if (!c.bubble && time >= c.giveUntil && time >= c.cheerUntil) drawQuirkFx(pctx, cPers.quirk, { x: c.x, headY: c.y + FOOT - 24, desk: null, time, seedMs: 1313, rm });
+    const cSeat = CEO_ROOM.seat;
+    const cSeated = c.state === 'sitting';
+    const cMouth = !rm && Boolean(c.bubble) && Math.floor(time * 8) % 2 === 0;
+    const cPhones = Boolean(QUIRKS[cPers.quirk]?.phones);
+    const cSpec = cSeated
+      ? { dir: 'down', pose: 'sit', frame: 0, mouth: cMouth, blink: !rm && (time * 1000 + 1313) % 4700 < 140, phones: cPhones }
+      : { dir: c.facing, pose: 'stand', moving: c.state === 'walking', frame: walkFrame(c.walkDist), mouth: cMouth, phones: cPhones };
+    if (!rm && time < c.giveUntil && !cSeated) cSpec.act = 'give';
+    else if (!rm && time < c.cheerUntil) cSpec.act = cSeated ? 'celebrate' : 'wave';
+    else if (!rm && c.state === 'doing' && c.goal === 'coffee') cSpec.act = 'sip';
+    else if (!rm && cSeated && (time + 5) % 23 < 2.4) cSpec.act = 'sip';
+    const cBehind = !cSeated && Math.abs(c.x - cSeat.x) < 31 && c.y <= cSeat.y + 6;
+    const cCalm = !c.bubble && time >= c.giveUntil && time >= c.cheerUntil;
+    items.push({ y: cSeat.y - 0.5, draw: () => drawChair(pctx, cSeat.x, cSeat.y, true) });
+    items.push({ y: cSeated || cBehind ? cSeat.y : c.y + FOOT, draw: () => {
+      figure(cLook, 'ceo', '#26304f', cSpec, c.x, cSeated ? c.y : c.y + FOOT, cSeated);
+      if (!cSeated && cCalm && c.state !== 'walking') drawQuirkFx(pctx, cPers.quirk, { x: c.x, headY: c.y + FOOT - 24, desk: null, time, seedMs: 1313, rm });
+    } });
+    items.push({ y: CEO_ROOM.desk.y + 0.5, draw: () => {
+      const d = CEO_ROOM.desk;
+      drawDesk(pctx, d, { status: null, t: time, color: '#e8ecef', big: true, reduced: rm, laptopX: d.x + 29, tray: CEO_ROOM.tray });
+      const pl = CEO_ROOM.plate;
+      rect(pctx, pl.x, pl.y, pl.w, pl.h, P.signPaper);
+      rect(pctx, pl.x, pl.y, pl.w, 1, P.posterFrame);
+      rect(pctx, pl.x, pl.y + pl.h - 1, pl.w, 1, P.posterFrame);
+      if (cSeated) {
+        drawHands(pctx, c.x, d.y, SKINS[cLook.skin].s, time, false, rm);
+        if (cCalm) drawQuirkFx(pctx, cPers.quirk, { x: c.x, headY: c.y - 17, desk: d, time, seedMs: 1313, rm });
+      }
     } });
     items.sort((a, b) => a.y - b.y);
     for (const it of items) it.draw();
