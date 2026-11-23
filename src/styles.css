@@ -1037,6 +1037,19 @@ h1 {
 .set-sw-box { display: grid; grid-template-columns: repeat(4, 0.5rem); border: 2px solid var(--edge); }
 .set-sw-box i { display: block; width: 0.5rem; height: 1.25rem; }
 .set-note { margin: 0; font-size: 1rem; color: var(--muted); }
+.set-phase { display: grid; gap: 0.375rem; margin-top: 0.125rem; }
+.set-select { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font-size: 1.1875rem; }
+.set-select select {
+  flex: 1 1 12rem;
+  min-width: 0;
+  min-height: 2.5rem;
+  padding: 0.25rem 0.5rem;
+  font: inherit;
+  color: inherit;
+  background: var(--panel-2);
+  border: 2px solid var(--edge);
+}
+.set-select select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .set-problems { padding: 0.375rem 0.625rem; background: var(--warn-bg); border: 3px solid var(--warn-line); color: var(--warn-ink); font-size: 1.0625rem; }
 .set-problems h3 { margin: 0 0 0.25rem; font-size: 1.0625rem; font-weight: bold; }
 .set-problems .set-note { color: inherit; }

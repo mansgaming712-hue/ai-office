@@ -1,8 +1,9 @@
-import { useRef } from 'react';
+import { useId, useRef } from 'react';
 import { LANGS, t } from '../i18n.js';
 import { paletteForTheme } from '../office/palette.js';
 import { DEFAULT_THEME_ID } from '../office/themeRegistry.js';
-import { MOTION_MODES, TIME_MODES } from '../settings.js';
+import { PHASES, PHASE_START, isPhase } from '../office/daycycle.js';
+import { MOTION_MODES } from '../settings.js';
 import { useDialogFocus } from './dialogA11y.js';
 
 const GEAR = [
@@ -68,16 +69,35 @@ function RadioGroup({ legend, name, value, options, onChange, hint = null }) {
   );
 }
 
+/** Pilihan mode waktu di UI: Mati, Otomatis, Manual (fasenya dipilih di daftar di bawahnya). */
+export const TIME_CHOICES = Object.freeze(['off', 'auto', 'manual']);
+
+/** Mode tersimpan → pilihan di UI ('off' | 'auto' | 'manual'). */
+export const timeChoiceOf = (timeMode) => (isPhase(timeMode) ? 'manual' : timeMode === 'auto' ? 'auto' : 'off');
+
+/** Pilihan UI → nilai timeMode yang disimpan. Manual mulai dari fase yang sedang tampil (livePhase) atau 'siang'. */
+export const timeModeForChoice = (choice, livePhase = null) => (choice === 'manual' ? (isPhase(livePhase) ? livePhase : 'siang') : choice);
+
+/** Jam mulai-selesai tiap fase, mis. "06:00-10:59" (teks bantuan, bukan terjemahan). */
+const pad = (h) => String(h).padStart(2, '0');
+export const phaseRange = (p) => {
+  const i = PHASES.indexOf(p);
+  const end = PHASE_START[PHASES[(i + 1) % PHASES.length]];
+  return `${pad(PHASE_START[p])}:00-${pad((end + 23) % 24)}:59`;
+};
+
 /**
  * Dialog pengaturan (modal aksesibel): role="dialog" aria-modal, judul dan deskripsi berlabel, fokus terjebak,
  * Esc menutup, klik latar menutup. Presentasional: semua nilai dan perubahan datang lewat props.
  */
 export default function SettingsDialog({
-  open, onClose, settings, onChange, onReset, themes, problems = [], lang, onLangChange, reducedMotion = false,
+  open, onClose, settings, onChange, onReset, themes, problems = [], lang, onLangChange, reducedMotion = false, livePhase = null,
 }) {
   const boxRef = useRef(null);
+  const phaseId = useId();
   const onKeyDown = useDialogFocus(open, boxRef, onClose);
   if (!open) return null;
+  const timeChoice = timeChoiceOf(settings.timeMode);
   const pick = (th, key) => th[key]?.[lang] ?? th[key]?.en ?? '';
   const themeOptions = themes.map((th) => ({
     value: th.id,
@@ -122,9 +142,25 @@ export default function SettingsDialog({
           <RadioGroup
             legend={t('ui.settings.time')}
             name="time-mode"
-            value={settings.timeMode}
-            options={TIME_MODES.map((m) => ({ value: m, label: t(`ui.settings.time.${m}`) }))}
-            onChange={(v) => onChange({ timeMode: v })}
+            value={timeChoice}
+            options={TIME_CHOICES.map((m) => ({ value: m, label: t(`ui.settings.time.${m}`) }))}
+            onChange={(v) => onChange({ timeMode: timeModeForChoice(v, livePhase) })}
+            hint={timeChoice === 'off' ? null : (
+              <div className="set-phase">
+                {timeChoice === 'auto' && (
+                  <p className="set-note" role="status">{t('ui.settings.time.now', { phase: t(`ui.settings.phase.${livePhase ?? 'siang'}`) })}</p>
+                )}
+                {timeChoice === 'manual' && (
+                  <label className="set-select" htmlFor={phaseId}>
+                    <span>{t('ui.settings.time.phase')}</span>
+                    <select id={phaseId} value={settings.timeMode} onChange={(e) => onChange({ timeMode: e.target.value })}>
+                      {PHASES.map((p) => <option key={p} value={p}>{`${t(`ui.settings.phase.${p}`)} (${phaseRange(p)})`}</option>)}
+                    </select>
+                  </label>
+                )}
+                <p className="set-note">{t('ui.settings.time.hours')}</p>
+              </div>
+            )}
           />
           <RadioGroup
             legend={t('ui.settings.motion')}

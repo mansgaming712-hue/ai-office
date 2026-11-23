@@ -26,7 +26,7 @@ Kantor pixel-art tempat manajer Claude Code dan 17 agen spesialisnya bekerja, te
 - **Autostart** on Windows, macOS, and Linux (optional).
 - **Your own divisions:** add a division as plain data (JSON and Markdown), from a skeleton or a starter pack. Up to 12 divisions. See [Custom divisions](#custom-divisions).
 - **Worker personalities:** each worker can have a nickname, a speech tone with phrases in its speech bubble, an idle habit, and a small quirk. These are for the dashboard only and never reach agent prompts. See [Worker personalities](docs/REFERENCE.md#worker-personalities).
-- **Office themes and settings:** five office themes (Jakarta is the default) and a Settings panel for the office theme, the time mode, motion, and rain. A theme is plain data; no code from a theme runs. See [Office themes and settings](docs/REFERENCE.md#office-themes-and-settings) and [Creating a theme](CONTRIBUTING.md#creating-a-theme).
+- **Office themes and settings:** five office themes (Jakarta is the default) and a Settings panel for the office theme, the time mode, motion, and rain. The office can follow the real time of day (dawn, morning, midday, afternoon, night) with colour tint, window light, lamps that turn on, and sleepy workers at night; set it to Automatic, Manual (pick a phase), or Off. A theme is plain data; no code from a theme runs. See [Day and night cycle](docs/REFERENCE.md#day-and-night-cycle), [Office themes and settings](docs/REFERENCE.md#office-themes-and-settings) and [Creating a theme](CONTRIBUTING.md#creating-a-theme).
 
 ### Quick start
 
@@ -195,7 +195,7 @@ AI Office is released under the MIT License. See [LICENSE](LICENSE).
 - **Autostart** di Windows, macOS, dan Linux (opsional).
 - **Divisi buatan pengguna:** tambahkan divisi sebagai data biasa (JSON dan Markdown), dari kerangka kosong atau starter pack. Maksimal 12 divisi. Lihat [Divisi buatan pengguna](#divisi-buatan-pengguna).
 - **Kepribadian worker:** setiap worker bisa punya nama panggilan, gaya bicara dengan frasa di balon ucapan, kebiasaan idle, dan quirk kecil. Ini hanya untuk tampilan dasbor dan tidak pernah masuk ke prompt agen. Lihat [Kepribadian worker](docs/REFERENCE.id.md#kepribadian-worker).
-- **Tema kantor dan pengaturan:** lima tema kantor (Jakarta sebagai bawaan) dan panel Pengaturan untuk tema kantor, mode waktu, gerak, dan hujan. Tema hanya berupa data; tidak ada kode dari tema yang dijalankan. Lihat [Tema kantor dan pengaturan](docs/REFERENCE.id.md#tema-kantor-dan-pengaturan) dan [Membuat tema](CONTRIBUTING.md#creating-a-theme) (berbahasa Inggris).
+- **Tema kantor dan pengaturan:** lima tema kantor (Jakarta sebagai bawaan) dan panel Pengaturan untuk tema kantor, mode waktu, gerak, dan hujan. Kantor bisa mengikuti waktu nyata (subuh, pagi, siang, sore, malam) dengan tint warna, cahaya jendela, lampu yang menyala, dan pekerja yang ngantuk saat malam; pilih Otomatis, Manual (pilih fase), atau Mati. Tema hanya berupa data; tidak ada kode dari tema yang dijalankan. Lihat [Siklus siang-malam](docs/REFERENCE.id.md#siklus-siang-malam), [Tema kantor dan pengaturan](docs/REFERENCE.id.md#tema-kantor-dan-pengaturan) dan [Membuat tema](CONTRIBUTING.md#creating-a-theme) (berbahasa Inggris).
 
 ### Mulai cepat
 

@@ -628,7 +628,7 @@ Lokasi kodenya:
 
 - `themes/` (data), `shared/themes.js` (validator dan batasnya)
 - `src/office/themeRegistry.js` (memuat tema saat build), `src/office/decor.js` (menggambar dekorasi), `src/office/palette.js` (palet dan `CONTRAST_PAIRS`)
-- `src/settings.js` (penyimpanan pengaturan), `src/ui/SettingsDialog.jsx` (dialog)
+- `src/office/daycycle.js` (fase dan tampilannya), `src/settings.js` (penyimpanan pengaturan), `src/ui/SettingsDialog.jsx` (dialog)
 
 ### Tema
 
@@ -650,17 +650,47 @@ Pengaturan berupa satu objek JSON di `localStorage` dengan kunci `ai-office-sett
 | Kolom | Nilai | Bawaan | Arti |
 | --- | --- | --- | --- |
 | `officeTheme` | id tema | `jakarta` | Tema kantor. |
-| `timeMode` | `follow`, `day`, `night` | `follow` | `follow` mengikuti tema antarmuka terang atau gelap (terang = day, gelap = night). `day` dan `night` mengunci tampilan. |
+| `timeMode` | `off`, `auto`, `subuh`, `pagi`, `siang`, `sore`, `malam` | `off` | `off` (Mati) adalah perilaku lama: kantor mengikuti tema antarmuka terang atau gelap (terang = day, gelap = night), tanpa tint atau lampu. `auto` (Otomatis) mengambil fase dari jam lokal browser. Nama fase (Manual) mengunci fase itu. Lihat [Siklus siang-malam](#siklus-siang-malam). Nilai lama `follow`, `day`, dan `night` tetap dibaca dan menjadi `off`, `siang`, dan `malam`. |
 | `motion` | `system`, `reduce`, `full` | `system` | `system` mengikuti `prefers-reduced-motion`. `reduce` dan `full` menimpanya. |
 | `rain` | `true`, `false` | `false` | Hujan di kantor. Kotak centang mati dan tidak bisa diubah saat gerak dikurangi. Nilai tersimpan tetap dipertahankan. |
 
 Elemen akar mendapat `data-motion="reduce"` atau `data-motion="full"`, dan atribut dihapus untuk `system`.
 
+### Siklus siang-malam
+
+Mode waktu bisa mewarnai kantor menurut waktu. Fase diambil dari **jam lokal browser** (zona waktu perangkat), diperiksa
+sekali per menit (dan saat tab terlihat lagi), tidak pernah per frame.
+
+| Fase (nilai `timeMode`) | Jam lokal | Palet | Tint | Cahaya jendela | Lampu | Tim |
+| --- | --- | --- | --- | --- | --- | --- |
+| `subuh` | 04:00-05:59 | night | indigo, 10% | kaca merah muda-oranye | nyala (90%) | ngantuk (60%) |
+| `pagi` | 06:00-10:59 | day | kuning pucat, 3% | kaca kuning pucat | mati | normal |
+| `siang` | 11:00-14:59 | day | tanpa tint | tanpa cahaya kaca (berkas cahaya siang netral) | mati | normal |
+| `sore` | 15:00-17:59 | day | oranye, 5% | kaca oranye | nyala (50%) | normal |
+| `malam` | 18:00-03:59 (melewati tengah malam) | night | biru tua, 8% | berkas cahaya bulan yang sejuk | nyala (100%) | ngantuk (100%) |
+
+Dialog Pengaturan menawarkan tiga pilihan: **Mati** (bawaan, tampilan lama), **Otomatis** (jam real-time, fase saat ini
+ditampilkan), dan **Manual** (daftar untuk memilih salah satu dari lima fase). Catatan:
+
+- Semua tema langsung bisa dipakai tanpa perubahan. Fase memilih palet `day` atau `night` milik tema (kolom palet) lalu
+  menambah lapisan warna tipis, cahaya jendela, dan lampu di atasnya; warnanya berasal dari fase, bukan dari `theme.json`.
+  Tema tidak butuh field baru, dan tema buatan pengguna yang sudah ada tetap jalan.
+- Tint fase dibuat tipis supaya setiap label tetap punya kontras minimal 4,5:1 di semua tema; test memeriksanya.
+- Saat fase aktif, latar di-cache per tema, varian, dan fase. Latar digambar ulang hanya bila salah satunya berubah.
+  Tint hanya satu persegi per frame.
+- Saat malam dan subuh, worker idle sesekali menguap di mejanya, sesekali bergumam ngantuk, dan lebih sering ke pantry
+  untuk ngopi. Ini hanya tampilan: tidak pernah mengubah status, antrean, atau event, dan memakai keacakan berbiji. Dengan
+  gerak dikurangi tidak ada jalan-jalan atau menguap; kalimat ngantuk (teks) tetap muncul.
+- Nilai tersimpan lama tetap berlaku: `follow` menjadi `off`, `day` menjadi `siang`, `night` menjadi `malam`. Versi
+  pengaturan tetap `1`. Pengguna yang tadinya memilih `night` kini juga melihat tint malam dan lampu.
+- Untuk test, jam disuntik: `phaseAt(now)` dan `watchPhase({ clock })` di `src/office/daycycle.js`, serta
+  `resolvePhase(timeMode, { now })` dan `resolveVariant(timeMode, { uiTheme, now })` di `src/settings.js`.
+
 ### Kunci localStorage
 
 | Kunci | Nilai | Dikelola oleh | Catatan |
 | --- | --- | --- | --- |
-| `ai-office-settings` | JSON, misalnya `{"v":1,"officeTheme":"jakarta","timeMode":"follow","motion":"system","rain":false}` | `src/settings.js` | `v` harus `1`. Kolom yang tidak dikenal dibuang saat disimpan. Nilai lebih dari 4096 karakter, JSON yang rusak, atau `v` lain dianggap rusak, dan bawaan dipakai. |
+| `ai-office-settings` | JSON, misalnya `{"v":1,"officeTheme":"jakarta","timeMode":"off","motion":"system","rain":false}` | `src/settings.js` | `v` harus `1`. Kolom yang tidak dikenal dibuang saat disimpan. Nilai lebih dari 4096 karakter, JSON yang rusak, atau `v` lain dianggap rusak, dan bawaan dipakai. |
 | `ai-office-rain` | `"1"` untuk hujan aktif, selain itu nonaktif | `src/settings.js` (lama) | Hanya dibaca bila `ai-office-settings` belum ada. Nilainya lalu disalin ke kunci baru. Kode tidak menghapusnya. Bila `ai-office-settings` ada tetapi rusak, bawaan dipakai, `rain` tetap membaca kunci ini, dan tidak ada yang ditulis. |
 | `ai-office-lang` | `en` atau `id` | `src/i18n.js` | Bahasa antarmuka. Dibaca sebelum render pertama. Bukan bagian objek pengaturan. |
 | `ai-office-theme` | `dark` atau `light` | `src/theme.js` dan `public/theme-init.js` | Mode terang atau gelap antarmuka, terpisah dari tema kantor. Bila kosong atau tidak valid, preferensi sistem dipakai, dan preferensi yang tidak diketahui berarti `dark`. |
@@ -668,7 +698,7 @@ Elemen akar mendapat `data-motion="reduce"` atau `data-motion="full"`, dan atrib
 Semua akses storage dibungkus `try`/`catch`. Bila storage diblokir atau penuh, perubahan tetap berlaku di memori sampai
 halaman dimuat ulang.
 
-Identifier di bagian ini (id tema, `follow`, `day`, `night`, `system`, `reduce`, `full`, dan nama kunci) sama dengan
+Identifier di bagian ini (id tema, `off`, `auto`, `subuh`, `pagi`, `siang`, `sore`, `malam`, `system`, `reduce`, `full`, dan nama kunci) sama dengan
 referensi bahasa Inggris.
 
 ## Test dan pemeriksaan

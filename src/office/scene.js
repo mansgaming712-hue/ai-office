@@ -5,6 +5,7 @@ import {
   DECOR, DOOR, MANAGER_SPOT, MEETING, PANTRY, W, H, WALL_H, WALL_ITEMS, WINDOWS, zoneList,
 } from './layout.js';
 import { DECOR_DEFAULTS } from '../../shared/themes.js';
+import { LAMP_COLOR } from './daycycle.js';
 import {
   drawFloorStyle, drawHillsSky, drawLights, drawMeetingPlant, drawOpenSky, drawPantryItems, drawPlantStyle, drawPosterStyle,
   drawProps, drawSpaceSky, drawWallStyle,
@@ -535,6 +536,54 @@ export function drawBackground(ctx, P, D = DEFAULT_DECOR, sprites = {}, rng = un
     else drawPlantStyle(ctx, P, item, D.plants);
   }
   drawProps(ctx, D, sprites);
+}
+
+// ------------------------------------------------------------------ cahaya fase hari (Fase 4)
+
+const LAMP_XS = [30, 110, 240, 370, 450]; // lampu langit-langit di tepi atas dinding
+
+/**
+ * Cahaya statis per fase hari, digambar SEKALI di atas latar (ikut ter-cache per tema, varian, dan fase):
+ * cahaya di kaca jendela, berkas cahaya jendela ke lantai, serta lampu kantor (lampu + kolam cahaya per zona).
+ * `look` = PHASE_LOOK[fase] (daycycle.js); tanpa `look` tidak menggambar apa pun. Hanya fillRect berwarna alpha:
+ * berlaku di semua tema tanpa field baru.
+ */
+export function drawDayLight(ctx, look) {
+  if (!look) return;
+  if (look.paneGlow.alpha > 0) {
+    ctx.fillStyle = look.paneGlow.css;
+    for (const p of paneRects()) ctx.fillRect(p.x, p.y, p.w, p.h);
+  }
+  if (look.spill.alpha > 0) {
+    ctx.fillStyle = look.spill.css;
+    for (const win of WINDOWS) {
+      for (const dx of [10, win.w - 44]) {
+        for (let i = 0; i < 22; i++) {
+          ctx.globalAlpha = 1 - i / 26;
+          ctx.fillRect(win.x + dx + Math.round(i * 0.8), WALL_H + 3 + i, 26, 1);
+        }
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+  if (look.lamps > 0) {
+    const a = look.lamps;
+    for (const x of LAMP_XS) {
+      ctx.fillStyle = rgba(LAMP_COLOR, 0.12 * a);
+      ctx.fillRect(x - 9, 2, 19, 6);
+      ctx.fillStyle = rgba(LAMP_COLOR, 0.2 * a);
+      ctx.fillRect(x - 6, 2, 13, 4);
+      rect(ctx, x - 3, 0, 7, 2, '#fff3c4');
+    }
+    for (const { rect: r } of zoneList()) {
+      for (const [k, al] of [[1, 0.035], [0.7, 0.04], [0.4, 0.05]]) {
+        const w = Math.round(r.w * k);
+        const h = Math.round(r.h * k * 0.8);
+        ctx.fillStyle = rgba(LAMP_COLOR, al * a);
+        ctx.fillRect(Math.round(r.x + (r.w - w) / 2), Math.round(r.y + (r.h - h) / 2), w, h);
+      }
+    }
+  }
 }
 
 // ------------------------------------------------------------------ efek bergerak (di atas latar)

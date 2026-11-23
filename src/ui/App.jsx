@@ -25,7 +25,9 @@ import { useReducedMotion, useTheme } from './useTheme.js';
 import SettingsDialog, { GearIcon } from './SettingsDialog.jsx';
 import { useSettings } from './useSettings.js';
 import { registry } from '../office/themeRegistry.js';
-import { applyMotionAttr, resolveReducedMotion, resolveVariant, settingsStore } from '../settings.js';
+import { applyMotionAttr, resolvePhase, resolveReducedMotion, resolveVariant, settingsStore } from '../settings.js';
+import { variantOfPhase } from '../office/daycycle.js';
+import { useAutoPhase } from './useDayPhase.js';
 
 const LOG_LIMIT = 300;
 
@@ -67,7 +69,10 @@ export default function App({ authRequired = false, onRecheckSession, onLogout }
   const lang = useLang();
   const reducedMotion = resolveReducedMotion(settings.motion, systemReduced);
   const officeTheme = registry.get(settings.officeTheme);
-  const variant = resolveVariant(settings.timeMode, { uiTheme: theme });
+  // Siklus siang-malam (Fase 4): 'auto' = jam lokal (diperiksa per menit), manual = fase terkunci, 'off' = tema UI.
+  const autoPhase = useAutoPhase(settings.timeMode === 'auto');
+  const phase = settings.timeMode === 'auto' ? autoPhase : resolvePhase(settings.timeMode);
+  const variant = phase ? variantOfPhase(phase) : resolveVariant(settings.timeMode, { uiTheme: theme });
   const [settingsOpen, setSettingsOpen] = useState(false);
   useEffect(() => {
     applyMotionAttr(document.documentElement, settings.motion);
@@ -431,6 +436,7 @@ export default function App({ authRequired = false, onRecheckSession, onLogout }
           theme={theme}
           officeTheme={officeTheme}
           variant={variant}
+          phase={phase}
           rain={settings.rain}
           onToggleRain={(on) => settingsStore.set({ rain: on })}
           reducedMotion={reducedMotion}
@@ -639,6 +645,7 @@ export default function App({ authRequired = false, onRecheckSession, onLogout }
         lang={lang}
         onLangChange={(code) => setLang(code)}
         reducedMotion={reducedMotion}
+        livePhase={settings.timeMode === 'auto' ? autoPhase : null}
       />
       {viewerId && <TaskViewer taskId={viewerId} live={tasks.find((x) => x.id === viewerId)} onClose={() => setViewerId(null)} />}
     </div>

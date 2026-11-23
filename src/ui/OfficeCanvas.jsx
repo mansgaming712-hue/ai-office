@@ -3,6 +3,7 @@ import { getState, subscribe } from '../divisions.js';
 import { t, useLang } from '../i18n.js';
 import { frameDelta } from '../motion.js';
 import { COMPACT_QUERY, FRAME_PAD, FRAME_PAD_COMPACT, fitCanvas } from '../office/fit.js';
+import { sleepinessOf } from '../office/daycycle.js';
 import { BASE_H, H, W } from '../office/layout.js';
 import { createRenderer } from '../office/render.js';
 
@@ -11,6 +12,8 @@ import { createRenderer } from '../office/render.js';
  * `overlay` menutupi kanvas persis (loading); `children` dirender di area kanvas, di luar bingkai (kartu kosong).
  * Tema kantor (`officeTheme` = objek dari themeRegistry) dan varian waktu (`variant` 'day'|'night'); tanpa itu, `theme`
  * ('light'|'dark') memilih tema Jakarta siang/malam. Pergantian mereset cache latar renderer.
+ * `phase` (Fase 4, 'subuh'|'pagi'|'siang'|'sore'|'malam' atau null = mati) menambah tint, cahaya jendela, lampu, dan
+ * perilaku ngantuk worker di atas varian; null = tampilan lama.
  * Tombol kecil di pojok kanvas menyalakan hujan di jendela (dekoratif; pilihan disimpan oleh induk lewat
  * `onToggleRain`; mati saat reduced motion).
  */
@@ -21,6 +24,7 @@ export default function OfficeCanvas({
   theme = 'dark',
   officeTheme = null,
   variant = undefined,
+  phase = null,
   rain = false,
   onToggleRain = undefined,
   reducedMotion = false,
@@ -34,7 +38,7 @@ export default function OfficeCanvas({
   const selectRef = useRef(onSelectWorker);
   selectRef.current = onSelectWorker;
   const sceneRef = useRef(null);
-  sceneRef.current = { arg: officeTheme ?? theme, variant };
+  sceneRef.current = { arg: officeTheme ?? theme, variant, phase };
   // Roster plugin berubah → tinggi kanvas berubah: render ulang (rasio) dan hitung ulang ukuran.
   const rosterVersion = useSyncExternalStore(subscribe, () => getState().version, () => 0);
   const fitRef = useRef(null);
@@ -43,7 +47,7 @@ export default function OfficeCanvas({
   useEffect(() => {
     const canvas = canvasRef.current;
     const wrap = wrapRef.current;
-    const renderer = createRenderer(canvas, { theme: sceneRef.current.arg, variant: sceneRef.current.variant });
+    const renderer = createRenderer(canvas, { theme: sceneRef.current.arg, variant: sceneRef.current.variant, phase: sceneRef.current.phase });
     rendererRef.current = renderer;
     document.fonts?.load('8px "VT323"').catch(() => {});
 
@@ -112,8 +116,12 @@ export default function OfficeCanvas({
   }, [rosterVersion]);
 
   useEffect(() => {
-    rendererRef.current?.setTheme(officeTheme ?? theme, variant);
-  }, [officeTheme, theme, variant]);
+    rendererRef.current?.setTheme(officeTheme ?? theme, variant, phase);
+  }, [officeTheme, theme, variant, phase]);
+
+  useEffect(() => {
+    office.setSleepy(sleepinessOf(phase));
+  }, [office, phase]);
 
   useEffect(() => {
     office.setReducedMotion(reducedMotion);
