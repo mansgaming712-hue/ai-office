@@ -355,11 +355,8 @@ describe('engine: kirim hasil, CEO, dan hujan', () => {
     const o = new Office();
     expect(o.ceo).toMatchObject({ x: CEO_ROOM.seat.x, y: CEO_ROOM.seat.y, state: 'sitting' });
     o.handleEvent(ev('assign', 'ceo', 'manager', 'Luncurkan'));
-    let gave = false;
-    run(o, 6, (x) => {
-      if (x.ceo.giveUntil > x.time) gave = true; // pose beri saat CEO menyerahkan amplop
-    });
-    expect(gave).toBe(true);
+    expect(o.ceo.giveUntil).toBeGreaterThan(o.time); // pose beri langsung (t=0)
+    run(o, 3);
     expect(o.manager.bubble?.kind).toBe('command');
     o.handleEvent(ev('report', 'manager', 'ceo', 'Beres'));
     run(o, 3);

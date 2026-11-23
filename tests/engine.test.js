@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { AGENT_NAMES } from '../shared/roster.js';
 import { normalizeEvent } from '../shared/events.js';
 import { Office } from '../src/office/engine.js';
-import { CEO_ROOM, CEO_VISIT, MANAGER_SPOT } from '../src/office/layout.js';
+import { CEO_ROOM, MANAGER_SPOT } from '../src/office/layout.js';
 import { findPath, pathLength } from '../src/office/pathfinding.js';
 import { SCENARIO, SCENARIO_DURATION, playScenario } from '../src/sim/scenario.js';
 
@@ -137,17 +137,13 @@ describe('alur assign → working → done', () => {
     expect(o.workers.get('explore').status).toBe('working');
   });
 
-  it('perintah CEO: CEO berdiri dan berjalan dari ruangannya, menyerahkan amplop, lalu bubble di manajer', () => {
+  it('perintah CEO: amplop langsung (t=0) dari meja CEO, lalu bubble di manajer; CEO berjalan paralel', () => {
     const o = new Office();
     o.handleEvent(ev('assign', 'ceo', 'manager', 'Luncurkan produk'));
-    expect(o.envelopes).toHaveLength(0); // amplop baru ada saat CEO sampai di manajer
-    expect(o.ceo.errands).toHaveLength(1);
-    let sawEnvelopeFrom = null;
-    run(o, 8, (x) => {
-      if (!sawEnvelopeFrom && x.envelopes.length) sawEnvelopeFrom = { kind: x.envelopes[0].kind, x: x.ceo.x, y: x.ceo.y };
-    });
-    expect(sawEnvelopeFrom.kind).toBe('command');
-    expect(Math.hypot(sawEnvelopeFrom.x - CEO_VISIT.manager.x, sawEnvelopeFrom.y - CEO_VISIT.manager.y)).toBeLessThan(2); // diserahkan di depan meja manajer
+    // t=0 seperti sebelum Fase 4b: amplop langsung terbang dari meja CEO; animasi CEO hanya kosmetik paralel
+    expect(o.envelopes).toHaveLength(1);
+    expect(o.envelopes[0]).toMatchObject({ kind: 'command', from: { x: CEO_ROOM.seat.x, y: CEO_ROOM.seat.y - 14 } });
+    run(o, 2.5);
     expect(o.manager.bubble).toMatchObject({ text: 'Luncurkan produk', kind: 'command' });
     run(o, 10);
     expect(o.ceo).toMatchObject({ state: 'sitting', x: CEO_ROOM.seat.x, y: CEO_ROOM.seat.y }); // kembali ke mejanya
