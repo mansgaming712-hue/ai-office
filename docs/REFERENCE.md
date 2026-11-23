@@ -657,6 +657,35 @@ The settings are one JSON object in `localStorage` under `ai-office-settings` (s
 
 The root element gets `data-motion="reduce"` or `data-motion="full"`, and the attribute is removed for `system`.
 
+### Office layout and the CEO room
+
+The logical canvas is 640 x 498 pixels (it was 480 x 456; `W`, `BASE_H` in `src/office/layout.js`) and `fitCanvas` scales it to the
+available width (a phone at 360 px included). From top to bottom:
+
+| Band | Contents |
+| --- | --- |
+| Top band (y 34 to 152) | Entrance door, pantry, the manager rug, the glass meeting room, and the **CEO room** (right) |
+| Row 1 (y 162) | Dev (7 desks), Marketing & Sales (3) |
+| Row 2 (y 298) | Content (2), Research (1), 3D (4, a 2x2 cluster) |
+| Row 3 (y 430) | Guests / Other (5 desks, full width) |
+| Row 4 and below | User divisions (two zones per row, up to 3 desks per row inside a zone), only when there are any |
+
+`ROOMS` in `src/office/layout.js` lists the bounding box of every room, and `tests/ceoRoom.test.js` checks that no room overlaps
+a zone or another room, with 0, 1, 2, 6, and 12 user divisions. A user division always gets a zone below every built-in room and zone.
+
+The CEO room is a closed room with glass walls and one door. The CEO sits at a large desk with a "CEO" nameplate (and a "CEO" sign on
+the glass), a bookshelf, a coffee table with a coffee machine, a plant, and a window in the wall behind. The colours come from the
+theme palette, so it follows the theme and the day and night cycle (lamp light and tint) with no new theme field. Behaviour (display
+only; it never changes a status, the queue, or an event):
+
+- A task from the CEO (`assign` from `ceo` to `manager`): the CEO stands up, walks out of the door to the front of the manager desk
+  (or to the front of the meeting room when the manager is away), hands over the envelope, and walks back. The manager reacts when the
+  envelope arrives, about three seconds after the event.
+- A report to the CEO (`report`/`blocked` from `manager` to `ceo`): the envelope lands on the CEO desk and the CEO reacts there.
+- Idle: now and then the CEO stands up to drink coffee at the coffee table or to look out of the window, then sits down again.
+  This uses its own seeded random stream, so it never shifts the pantry trips or the personality lines of the workers.
+- Reduced motion: the CEO never walks. The envelope flies straight from the desk to the manager, and all text stays.
+
 ### Day and night cycle
 
 The time mode can colour the office by the time of day. The phase comes from the **local time of the browser**

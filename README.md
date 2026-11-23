@@ -9,13 +9,17 @@ Kantor pixel-art tempat manajer Claude Code dan 17 agen spesialisnya bekerja, te
 
 ![AI Office demo](docs/images/demo.gif)
 
+| Dark | Light | Mobile |
+| --- | --- | --- |
+| ![AI Office, dark theme](docs/images/dashboard-dark.png) | ![AI Office, light theme](docs/images/dashboard-light.png) | ![AI Office on a phone](docs/images/dashboard-mobile.png) |
+
 **English** | [Bahasa Indonesia](#bahasa-indonesia)
 
 ## English
 
 ### Features
 
-- **Pixel-art office** in a Jakarta style, with a manager desk, specialist desks, and a live event log.
+- **Pixel-art office** in a Jakarta style, with a manager desk, specialist desks, a live event log, and a closed CEO room: the CEO sits at the desk, walks out to hand over a task, and sometimes stops for coffee or looks out of the window (no walking with reduced motion). See [Office layout and the CEO room](docs/REFERENCE.md#office-layout-and-the-ceo-room).
 - **Real tasks:** type a task in the command box. The server starts Claude Code as the manager, in a new folder
   under `output/`. Open the result from the **Tasks** panel.
 - **Demo:** the **Demo** button plays a sample task (about 54 seconds) from the server, without Claude Code.
@@ -184,7 +188,7 @@ AI Office is released under the MIT License. See [LICENSE](LICENSE).
 
 ### Fitur
 
-- **Kantor pixel-art** bergaya Jakarta, dengan meja manajer, meja spesialis, dan log kejadian langsung.
+- **Kantor pixel-art** bergaya Jakarta, dengan meja manajer, meja spesialis, log kejadian langsung, dan ruang CEO tertutup: CEO duduk di mejanya, berjalan keluar untuk menyerahkan tugas, dan sesekali minum kopi atau melihat jendela (tanpa berjalan bila gerak dikurangi). Lihat [Tata letak kantor dan ruang CEO](docs/REFERENCE.id.md#tata-letak-kantor-dan-ruang-ceo).
 - **Tugas sungguhan:** ketik tugas di kotak perintah. Server menjalankan Claude Code sebagai manajer, di folder baru
   di dalam `output/`. Hasilnya dibuka dari panel **Tugas**.
 - **Demo:** tombol **Demo** memutar tugas contoh (sekitar 54 detik) dari server, tanpa Claude Code. **▶ Simulasi**

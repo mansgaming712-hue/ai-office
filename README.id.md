@@ -5,11 +5,17 @@ Kantor pixel-art tempat manajer Claude Code dan 17 agen spesialisnya bekerja, te
 Dokumen ini adalah versi Bahasa Indonesia. Versi dua bahasa (Inggris dan Indonesia) ada di [README.md](README.md),
 dan versi Inggris ada di [bagian English](README.md#english).
 
+![Demo AI Office](docs/images/demo.gif)
+
+| Gelap | Terang | Ponsel |
+| --- | --- | --- |
+| ![AI Office, tema gelap](docs/images/dashboard-dark.png) | ![AI Office, tema terang](docs/images/dashboard-light.png) | ![AI Office di ponsel](docs/images/dashboard-mobile.png) |
+
 ## Bahasa Indonesia
 
 ### Fitur
 
-- **Kantor pixel-art** bergaya Jakarta, dengan meja manajer, meja spesialis, dan log kejadian langsung.
+- **Kantor pixel-art** bergaya Jakarta, dengan meja manajer, meja spesialis, log kejadian langsung, dan ruang CEO tertutup: CEO duduk di mejanya, berjalan keluar untuk menyerahkan tugas, dan sesekali minum kopi atau melihat jendela (tanpa berjalan bila gerak dikurangi). Lihat [Tata letak kantor dan ruang CEO](docs/REFERENCE.id.md#tata-letak-kantor-dan-ruang-ceo).
 - **Tugas sungguhan:** ketik tugas di kotak perintah. Server menjalankan Claude Code sebagai manajer, di folder baru
   di dalam `output/`. Hasilnya dibuka dari panel **Tugas**.
 - **Demo:** tombol **Demo** memutar tugas contoh (sekitar 54 detik) dari server, tanpa Claude Code. **▶ Simulasi**

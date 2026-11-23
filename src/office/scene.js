@@ -2,7 +2,7 @@
 // tema atau ukuran berubah. Efek yang bergerak (awan, bintang, lalu lintas, hujan, uap kopi) ada di drawSkyFx/drawSteam
 // dan digambar tiap frame di atas latar yang sudah jadi, hanya di area kaca jendela.
 import {
-  DECOR, DOOR, MANAGER_SPOT, MEETING, PANTRY, W, H, WALL_H, WALL_ITEMS, WINDOWS, zoneList,
+  CEO_ROOM, DECOR, DOOR, MANAGER_SPOT, MEETING, PANTRY, ROOMS, W, H, WALL_H, WALL_ITEMS, WINDOWS, zoneList,
 } from './layout.js';
 import { DECOR_DEFAULTS } from '../../shared/themes.js';
 import { LAMP_COLOR } from './daycycle.js';
@@ -71,6 +71,15 @@ const TOWERS = [
   { x: 392, w: 9, h: 25, s: 'slant' },
   { x: 403, w: 9, h: 25, s: 'slantR' },
   { x: 417, w: 12, h: 20, s: 'box' },
+  // jendela ruang CEO
+  { x: 500, w: 10, h: 26, s: 'slant' },
+  { x: 512, w: 10, h: 26, s: 'slantR' },
+  { x: 528, w: 12, h: 20, s: 'box' },
+  { x: 544, w: 11, h: 31, s: 'wisma' },
+  { x: 566, w: 12, h: 24, s: 'round' },
+  { x: 582, w: 9, h: 17, s: 'box' },
+  { x: 596, w: 12, h: 29, s: 'stepped' },
+  { x: 611, w: 10, h: 22, s: 'box' },
 ];
 
 /** Posisi lampu merah di puncak gedung (kedip di malam hari), diisi saat skyline digambar. */
@@ -184,7 +193,7 @@ function drawSkyline(ctx, P, D) {
   ctx.clip();
   for (const win of WINDOWS) rect(ctx, win.x, win.y, win.w, win.h, P.winGlass);
   const x0 = WINDOWS[0].x;
-  const x1 = WINDOWS[1].x + WINDOWS[1].w;
+  const x1 = WINDOWS.at(-1).x + WINDOWS.at(-1).w;
   const top = WINDOWS[0].y;
   // langit berlapis (dithering di batas)
   const bands = [[top, 14, P.skyTop], [top + 14, 12, P.skyMid], [top + 26, 20, P.skyLow]];
@@ -465,6 +474,85 @@ function drawMeetBoard(ctx, P) {
   rect(ctx, b.x + 2, b.y + b.h - 3, b.w - 4, 2, '#8d949c');
 }
 
+// ------------------------------------------------------------------ ruang CEO
+
+/** Ruang CEO tertutup: lantai, karpet, rak buku, meja kopi, dinding kaca, pintu. Warna turun dari palet tema. */
+function drawCeoRoom(ctx, P) {
+  const r = CEO_ROOM.rect;
+  const gy = r.y + r.h - 14; // atas dinding kaca depan
+  // lantai ruangan (seperti ruang rapat) dan karpet
+  rect(ctx, r.x + 4, r.y + 2, r.w - 8, r.h - 16, P.meetFloor);
+  for (let y = r.y + 6; y < gy - 2; y += 6) rect(ctx, r.x + 4, y, r.w - 8, 1, P.meetFloorLine);
+  const mr = CEO_ROOM.rug;
+  rect(ctx, mr.x, mr.y, mr.w, mr.h, P.rugA);
+  rect(ctx, mr.x + 2, mr.y + 2, mr.w - 4, mr.h - 4, P.rugB);
+  for (let x = mr.x + 6; x < mr.x + mr.w - 6; x += 6) rect(ctx, x, mr.y + 4, 2, 1, P.rugStitch);
+  // rak buku di dinding belakang
+  const s = CEO_ROOM.shelf;
+  rect(ctx, s.x, s.y, s.w, s.h, P.deskFrontLo);
+  rect(ctx, s.x + 1, s.y, s.w - 2, s.h - 1, P.deskFront);
+  const book = [P.accentA, P.accentB, P.accentC, '#e8ecef', '#8d949c'];
+  for (let row = 0; row < 3; row++) {
+    const by = s.y + 2 + row * 9;
+    rect(ctx, s.x + 1, by + 7, s.w - 2, 1, P.deskFrontLo);
+    let bx = s.x + 3;
+    for (let i = 0; bx < s.x + s.w - 4; i++) {
+      const bw = 2 + ((i + row) % 2);
+      const bh = 5 + ((i * 3 + row) % 3);
+      rect(ctx, bx, by + 7 - bh, bw, bh, book[(i + row * 2) % book.length]);
+      bx += bw + 1;
+    }
+  }
+  // meja kopi + mesin kopi
+  const c = CEO_ROOM.credenza;
+  rect(ctx, c.x, c.y, c.w, 4, P.counterTop);
+  rect(ctx, c.x, c.y, c.w, 1, P.counterTopHi);
+  rect(ctx, c.x, c.y + 4, c.w, c.h - 4, P.counterFront);
+  rect(ctx, c.x, c.y + 4, c.w, 1, P.counterFrontLo);
+  rect(ctx, c.x + 3, c.y + 7, 12, c.h - 9, P.counterFrontLo);
+  rect(ctx, c.x + 4, c.y + 8, 10, c.h - 11, P.counterFront);
+  rect(ctx, c.x + 17, c.y + 7, 12, c.h - 9, P.counterFrontLo);
+  rect(ctx, c.x + 18, c.y + 8, 10, c.h - 11, P.counterFront);
+  rect(ctx, c.x + 4, c.y - 7, 9, 7, '#2b2f3a'); // mesin kopi
+  rect(ctx, c.x + 4, c.y - 7, 9, 1, '#4a5060');
+  rect(ctx, c.x + 6, c.y - 4, 5, 3, '#8d949c');
+  rect(ctx, c.x + 11, c.y - 6, 1, 1, '#e04848');
+  for (let i = 0; i < 2; i++) {
+    rect(ctx, c.x + 18 + i * 4, c.y - 3, 3, 3, '#f4f1ea');
+    rect(ctx, c.x + 18 + i * 4, c.y - 2, 3, 1, [P.accentA, P.accentB][i]);
+  }
+  // dinding kaca: kiri, kanan, depan (bukaan pintu di kiri)
+  const gw = (x, y, w, h) => rect(ctx, x, y, w, h, P.glassWall);
+  rect(ctx, r.x, r.y, 2, r.h, P.glassFrame);
+  gw(r.x + 2, r.y, 2, r.h - 12);
+  gw(r.x + r.w - 4, r.y, 2, r.h - 12);
+  rect(ctx, r.x + r.w - 2, r.y, 2, r.h, P.glassFrame);
+  const d = CEO_ROOM.door;
+  for (const [x0, x1] of [[r.x + 4, d.x], [d.x + d.w, r.x + r.w - 4]]) {
+    gw(x0, gy, x1 - x0, 12);
+    rect(ctx, x0, gy - 1, x1 - x0, 2, P.glassFrame);
+    rect(ctx, x0, r.y + r.h - 3, x1 - x0, 3, P.glassFrame);
+  }
+  ctx.fillStyle = P.glassSheen;
+  for (let x = d.x + d.w + 6; x < r.x + r.w - 40; x += 36) {
+    for (let i = 0; i < 8; i++) ctx.fillRect(x + i, gy + 1 + i, 3, 1);
+    for (let i = 0; i < 4; i++) ctx.fillRect(x + 13 + i, gy + 1 + i * 2, 2, 1);
+  }
+  // pintu: kusen, daun pintu terbuka sedikit, keset
+  rect(ctx, d.x - 2, gy - 1, 3, 15, P.doorFrame);
+  rect(ctx, d.x + d.w - 1, gy - 1, 3, 15, P.doorFrame);
+  rect(ctx, d.x - 2, gy - 2, d.w + 4, 2, P.doorFrame);
+  rect(ctx, d.x + 1, gy, 3, 12, P.door);
+  rect(ctx, d.x + 1, gy + 2, 1, 8, P.doorPanel);
+  rect(ctx, d.x + 2, gy + 6, 1, 2, P.doorKnob);
+  rect(ctx, d.x + 4, r.y + r.h - 5, d.w - 8, 4, P.night ? '#3a2f3f' : '#7b5a43');
+  // plakat "CEO" di kaca depan
+  const sp = CEO_ROOM.sign;
+  rect(ctx, sp.x, sp.y, sp.w, sp.h, P.signPaper);
+  rect(ctx, sp.x, sp.y, sp.w, 1, P.posterFrame);
+  rect(ctx, sp.x, sp.y + sp.h - 1, sp.w, 1, P.posterFrame);
+}
+
 // ------------------------------------------------------------------ dekorasi
 
 function drawPlant(ctx, { x, y, w, h }) {
@@ -530,6 +618,7 @@ export function drawBackground(ctx, P, D = DEFAULT_DECOR, sprites = {}, rng = un
   drawMeetBoard(ctx, P);
   drawPantry(ctx, P, D.pantry);
   drawMeeting(ctx, P, D.plants);
+  drawCeoRoom(ctx, P);
   for (const item of DECOR) {
     if (item.kind !== 'plant' || D.plants === 'none') continue;
     if (D.plants === 'leafy') drawPlant(ctx, item);
@@ -540,7 +629,7 @@ export function drawBackground(ctx, P, D = DEFAULT_DECOR, sprites = {}, rng = un
 
 // ------------------------------------------------------------------ cahaya fase hari (Fase 4)
 
-const LAMP_XS = [30, 110, 240, 370, 450]; // lampu langit-langit di tepi atas dinding
+const LAMP_XS = [30, 110, 240, 370, 450, 560]; // lampu langit-langit di tepi atas dinding
 
 /**
  * Cahaya statis per fase hari, digambar SEKALI di atas latar (ikut ter-cache per tema, varian, dan fase):
@@ -575,7 +664,7 @@ export function drawDayLight(ctx, look) {
       ctx.fillRect(x - 6, 2, 13, 4);
       rect(ctx, x - 3, 0, 7, 2, '#fff3c4');
     }
-    for (const { rect: r } of zoneList()) {
+    for (const r of [...zoneList().map((z) => z.rect), ROOMS.ceo]) {
       for (const [k, al] of [[1, 0.035], [0.7, 0.04], [0.4, 0.05]]) {
         const w = Math.round(r.w * k);
         const h = Math.round(r.h * k * 0.8);
@@ -605,7 +694,7 @@ export function drawSkyFx(ctx, P, t, { rain = 0, reduced = false, decor = DEFAUL
   const cityLike = sky === 'city' || sky === 'neon';
   clipToPanes(ctx);
   const x0 = WINDOWS[0].x;
-  const span = WINDOWS[1].x + WINDOWS[1].w - x0 + 60;
+  const span = WINDOWS.at(-1).x + WINDOWS.at(-1).w - x0 + 60;
   const k = reduced ? 0 : t;
   if (sky === 'stars') {
     // ruang angkasa: bintang berkelip siang dan malam (reduced motion: diam)

@@ -656,6 +656,33 @@ Pengaturan berupa satu objek JSON di `localStorage` dengan kunci `ai-office-sett
 
 Elemen akar mendapat `data-motion="reduce"` atau `data-motion="full"`, dan atribut dihapus untuk `system`.
 
+### Tata letak kantor dan ruang CEO
+
+Kanvas logis berukuran 640 x 498 piksel (dulu 480 x 456; `W`, `BASE_H` di `src/office/layout.js`) dan `fitCanvas` menyesuaikannya dengan
+lebar yang tersedia (termasuk ponsel 360 px). Dari atas ke bawah:
+
+| Pita | Isi |
+| --- | --- |
+| Pita atas (y 34 sampai 152) | Pintu masuk, pantry, karpet manajer, ruang rapat kaca, dan **ruang CEO** (kanan) |
+| Baris 1 (y 162) | Dev (7 meja), Marketing & Sales (3) |
+| Baris 2 (y 298) | Konten (2), Riset (1), 3D (4, klaster 2x2) |
+| Baris 3 (y 430) | Tamu / Lainnya (5 meja, selebar kantor) |
+| Baris 4 ke bawah | Divisi buatan pengguna (dua zona per baris, maksimal 3 meja per baris di dalam zona), hanya bila ada |
+
+`ROOMS` di `src/office/layout.js` memuat kotak pembatas tiap ruangan, dan `tests/ceoRoom.test.js` memeriksa bahwa tidak ada ruangan yang
+menimpa zona atau ruangan lain, dengan 0, 1, 2, 6, dan 12 divisi pengguna. Divisi pengguna selalu mendapat zona di bawah semua ruangan dan zona bawaan.
+
+Ruang CEO adalah ruangan tertutup berdinding kaca dengan satu pintu. CEO duduk di meja besar dengan papan nama "CEO" (dan plakat "CEO" di
+kaca), rak buku, meja kopi dengan mesin kopi, tanaman, dan jendela di dinding belakang. Warnanya diturunkan dari palet tema, jadi ikut tema dan
+siklus siang-malam (cahaya lampu dan tint) tanpa field tema baru. Perilaku (hanya tampilan; tidak mengubah status, antrean, atau event):
+
+- Tugas dari CEO (`assign` dari `ceo` ke `manager`): CEO berdiri, berjalan keluar pintu ke depan meja manajer (atau ke depan ruang rapat bila
+  manajer sedang pergi), menyerahkan amplop, lalu kembali. Manajer bereaksi saat amplop tiba, sekitar tiga detik setelah event.
+- Laporan ke CEO (`report`/`blocked` dari `manager` ke `ceo`): amplop mendarat di meja CEO dan CEO bereaksi di sana.
+- Idle: sesekali CEO berdiri untuk minum kopi di meja kopi atau melihat jendela, lalu duduk lagi. Ini memakai aliran acak berbiji
+  tersendiri, jadi tidak menggeser perjalanan pantry atau frasa kepribadian para pekerja.
+- Reduced motion: CEO tidak berjalan. Amplop terbang langsung dari meja ke manajer, dan semua teks tetap tampil.
+
 ### Siklus siang-malam
 
 Mode waktu bisa mewarnai kantor menurut waktu. Fase diambil dari **jam lokal browser** (zona waktu perangkat), diperiksa

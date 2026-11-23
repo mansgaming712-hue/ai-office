@@ -3,7 +3,7 @@
 import { CEO_ID, MANAGER_ID } from '../../shared/roster.js';
 import { agentNames } from '../divisions.js';
 import {
-  CELL, DOOR, H, MANAGER_SPOT, PANTRY, W, obstacles, otherSeat, rosterSeats,
+  CEO_ROOM, CEO_VISIT, CELL, H, MANAGER_SPOT, PANTRY, W, obstacles, otherSeat, rosterSeats,
 } from './layout.js';
 import { createGrid, findPath } from './pathfinding.js';
 import { getLang, t } from '../i18n.js';
@@ -46,6 +46,14 @@ export const TUNING = {
   phraseFor: 3, // lama bubble frasa
   sleepyEvery: [30, 60], // jeda antar celetukan ngantuk saat malam (detik, dibagi tingkat ngantuk)
   sleepyGapCut: 0.4, // pada ngantuk penuh, jeda perjalanan pantry (kopi) dipotong sebesar ini
+  ceoRise: 0.35, // detik CEO berdiri dari kursi sebelum berjalan
+  ceoWalk: 70, // CEO berjalan santai (kopi, lihat jendela, kembali)
+  ceoRush: 160, // CEO mengantar tugas
+  ceoGive: 0.9, // detik CEO berdiri menyerahkan amplop
+  ceoIdleFirst: [9, 18], // jeda sebelum kebiasaan idle CEO pertama (detik, aliran RNG khusus CEO)
+  ceoIdleEvery: [22, 45], // jeda antar kebiasaan idle CEO
+  ceoCoffee: [5, 8], // lama minum kopi berdiri
+  ceoWindow: [5, 9], // lama berdiri melihat jendela
 };
 
 // Obrolan santai di pantry (hanya agen yang benar-benar idle). Kunci office.chat.1..N di locales.
@@ -112,8 +120,26 @@ export class Office {
       typingUntil: 0,
       phraseIn: null,
     };
-    // CEO berdiri di dekat pintu: memberi perintah (amplop) dan menerima laporan manajer.
-    this.ceo = { x: DOOR.enter.x, y: DOOR.enter.y, facing: 'down', bubble: null, giveUntil: -Infinity, cheerUntil: -Infinity, phraseIn: null };
+    // CEO duduk di mejanya (ruang CEO). Aliran RNG sendiri (tidak menggeser aliran lain, juga saat opts.rng diberikan).
+    // Tugas masuk: berdiri, berjalan mengantar amplop ke manajer, lalu kembali; idle: sesekali kopi atau lihat jendela.
+    this.crng = makeRng(seed ^ 0x7f4a7c15);
+    this.ceo = {
+      x: CEO_ROOM.seat.x,
+      y: CEO_ROOM.seat.y,
+      state: 'sitting', // sitting | rising | walking | doing
+      goal: null, // errand | coffee | window | home
+      facing: 'down',
+      path: [],
+      speed: 0,
+      walkDist: 0,
+      timer: 0,
+      errands: [], // perintah CEO yang menunggu diantar
+      idleIn: null,
+      bubble: null,
+      giveUntil: -Infinity,
+      cheerUntil: -Infinity,
+      phraseIn: null,
+    };
     this.queue = [];
     this.envelopes = [];
     this.popups = [];
@@ -239,7 +265,10 @@ export class Office {
   /** Preferensi reduced motion: amplop terbang lurus (tanpa lengkung). Info tetap sama. */
   setReducedMotion(on) {
     this.reducedMotion = Boolean(on);
-    if (this.reducedMotion) for (const w of this.workers.values()) this.#snapToSeat(w); // tanpa jalan-jalan idle
+    if (this.reducedMotion) {
+      for (const w of this.workers.values()) this.#snapToSeat(w); // tanpa jalan-jalan idle
+      this.#ceoSnapHome();
+    }
   }
 
   /**
@@ -292,10 +321,7 @@ export class Office {
         if (from !== CEO_ID && from !== MANAGER_ID && this.workers.has(from)) {
           this.#workerEvent(this.workers.get(from), { ...e, type: 'report' });
         } else {
-          this.ceo.giveUntil = this.time + 0.9;
-          this.#envelope(DOOR.enter, { x: MANAGER_SPOT.seat.x, y: MANAGER_SPOT.seat.y - 12 }, 'command', () => {
-            this.manager.bubble = this.#bubble(message || t('office.bubble.newCommand'), 'command', 4, project);
-          });
+          this.ceo.errands.push({ message, project });
         }
         return;
       }
@@ -391,8 +417,8 @@ export class Office {
   #managerToCeo(message, kind, project = null) {
     const m = this.manager;
     m.bubble = this.#bubble(message || t('office.bubble.reportCeo'), kind === 'blocked' ? 'blocked' : 'report', 4.5, project);
-    this.#envelope({ x: m.x, y: m.y - 14 }, DOOR.enter, 'ceo', () => {
-      this.popups.push({ x: DOOR.enter.x, y: DOOR.enter.y - 14, text: t('office.label.ceo'), born: this.time, until: this.time + 1.4 });
+    this.#envelope({ x: m.x, y: m.y - 14 }, { x: CEO_ROOM.tray.x, y: CEO_ROOM.tray.y - 8 }, 'ceo', () => {
+      this.popups.push({ x: this.ceo.x, y: this.ceo.y - 14, text: t('office.label.ceo'), born: this.time, until: this.time + 1.4 });
       this.ceo.cheerUntil = this.time + 1.3;
       this.ceo.bubble = this.#bubble(t('office.bubble.ceoThanks'), 'ceo', 2.6);
     });
@@ -420,6 +446,7 @@ export class Office {
     dt = Number.isFinite(dt) ? clamp(dt, 0, 0.1) : 0; // tab yang tertidur tidak membuat lompatan besar; NaN diabaikan
     this.time += dt;
     this.#updateManager(dt);
+    this.#updateCeo(dt);
     this.#updateEnvelopes(dt);
     this.#updateIdleLife(dt);
     const rainGoal = this.rainOn ? 1 : 0;
@@ -630,6 +657,137 @@ export class Office {
     this.#tickPhrase(c, CEO_ID, !c.bubble && this.time >= c.giveUntil && this.time >= c.cheerUntil && !this.envelopes.length, dt);
   }
 
+  // ---------------------------------------------------------------- CEO
+
+  #crange([a, b]) {
+    return a + this.crng() * (b - a);
+  }
+
+  #ceoSnapHome() {
+    const c = this.ceo;
+    c.state = 'sitting';
+    c.goal = null;
+    c.x = CEO_ROOM.seat.x;
+    c.y = CEO_ROOM.seat.y;
+    c.facing = 'down';
+    c.path = [];
+    c.speed = 0;
+  }
+
+  /** Antar semua perintah yang menunggu: amplop terbang dari tangan CEO ke baki manajer. */
+  #ceoDeliver() {
+    const c = this.ceo;
+    const jobs = c.errands;
+    c.errands = [];
+    c.giveUntil = this.time + TUNING.ceoGive;
+    for (const { message, project } of jobs) {
+      this.#envelope({ x: c.x, y: c.y - 14 }, { x: MANAGER_SPOT.seat.x, y: MANAGER_SPOT.seat.y - 12 }, 'command', () => {
+        this.manager.bubble = this.#bubble(message || t('office.bubble.newCommand'), 'command', 4, project);
+      });
+    }
+  }
+
+  /** Mulai berjalan ke tujuan: 'errand' (manajer, atau ruang rapat bila manajer sedang pergi), 'coffee', 'window', atau 'home'. */
+  #ceoGo(goal) {
+    const c = this.ceo;
+    const exit = CEO_ROOM.exit;
+    const target = {
+      errand: this.manager.state === 'sitting' ? CEO_VISIT.manager : CEO_VISIT.meeting,
+      coffee: CEO_ROOM.coffee,
+      window: CEO_ROOM.window,
+      home: exit,
+    }[goal];
+    const atSeat = Math.hypot(c.x - CEO_ROOM.seat.x, c.y - CEO_ROOM.seat.y) < 2;
+    const from = atSeat ? exit : { x: c.x, y: c.y };
+    const walk = findPath(this.grid, from, target) ?? [{ ...target }];
+    c.path = [...(atSeat ? [{ ...exit }] : []), ...walk];
+    if (goal === 'home') c.path.push({ ...CEO_ROOM.seat });
+    c.goal = goal;
+    c.state = 'walking';
+    c.speed = 0;
+  }
+
+  #updateCeo(dt) {
+    const c = this.ceo;
+    if (this.reducedMotion) {
+      // tanpa jalan-jalan: perintah langsung diantar dari meja (amplop terbang dan teks tetap jelas)
+      if (c.state !== 'sitting') this.#ceoSnapHome();
+      if (c.errands.length) this.#ceoDeliver();
+      return;
+    }
+    if (c.errands.length && c.state !== 'sitting' && c.state !== 'rising' && c.goal !== 'errand') {
+      this.#ceoGo('errand'); // ada tugas masuk: batalkan kopi/jendela/kembali, langsung mengantar
+    }
+    switch (c.state) {
+      case 'sitting': {
+        if (c.errands.length) {
+          c.state = 'rising';
+          c.goal = 'errand';
+          c.timer = TUNING.ceoRise;
+          break;
+        }
+        c.idleIn ??= this.#crange(TUNING.ceoIdleFirst);
+        c.idleIn -= dt;
+        if (c.idleIn > 0) break;
+        const calm = this.time >= c.giveUntil && this.time >= c.cheerUntil && (!c.bubble || c.bubble.ambient) && !this.envelopes.length;
+        if (!calm) {
+          c.idleIn = 3;
+          break;
+        }
+        c.idleIn = this.#crange(TUNING.ceoIdleEvery);
+        c.state = 'rising';
+        c.goal = this.crng() < 0.55 ? 'coffee' : 'window';
+        c.timer = TUNING.ceoRise;
+        break;
+      }
+      case 'rising':
+        c.timer -= dt;
+        if (c.timer <= 0) this.#ceoGo(c.goal);
+        break;
+      case 'walking': {
+        const target = c.goal === 'errand' ? TUNING.ceoRush : TUNING.ceoWalk;
+        c.speed = nextSpeed({
+          speed: Math.max(c.speed, 0),
+          target,
+          remaining: remainingLength(c, c.path),
+          dt,
+          accel: TUNING.accel,
+          decel: TUNING.decel,
+          minSpeed: TUNING.minSpeed,
+        });
+        const step = advanceAlongPath(c, c.path, c.speed * dt);
+        c.x = step.x;
+        c.y = step.y;
+        c.path = step.path;
+        c.walkDist += step.moved;
+        if (step.facing) c.facing = step.facing;
+        if (c.path.length) break;
+        c.speed = 0;
+        if (c.goal === 'home') {
+          this.#ceoSnapHome();
+          break;
+        }
+        c.state = 'doing';
+        c.facing = 'up';
+        if (c.goal === 'errand') {
+          c.timer = TUNING.ceoGive;
+          this.#ceoDeliver();
+        } else c.timer = this.#crange(c.goal === 'coffee' ? TUNING.ceoCoffee : TUNING.ceoWindow);
+        break;
+      }
+      case 'doing':
+        c.timer -= dt;
+        if (c.goal === 'errand' && c.errands.length) {
+          this.#ceoDeliver();
+          c.timer = TUNING.ceoGive;
+        }
+        if (c.timer <= 0) this.#ceoGo('home');
+        break;
+      default:
+        break;
+    }
+  }
+
   #walkTo(target) {
     const m = this.manager;
     m.path = findPath(this.grid, { x: m.x, y: m.y }, target) ?? [{ ...target }];
@@ -757,6 +915,8 @@ export class Office {
   isIdle() {
     return (
       this.manager.state === 'sitting' &&
+      !this.ceo.errands.length &&
+      this.ceo.goal !== 'errand' &&
       !this.queue.length &&
       !this.envelopes.length &&
       !this.scheduled.length

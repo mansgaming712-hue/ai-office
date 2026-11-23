@@ -39,7 +39,7 @@ export const CONTRAST_PAIRS = [
   ['inkSoft', 'floor', 'label status di lantai'],
   ['onRug', 'rugB', 'label manajer di karpet'],
   ['onRug', 'rugA', 'label manajer di karpet (tepi)'],
-  ['onDoor', 'doorPanel', 'label CEO di pintu'],
+  ['onDoor', 'doorPanel', 'label di pintu masuk'],
   ['onTray', 'trayIn', 'jumlah surat di baki'],
   ['bubbleInk', 'bubblePaper', 'teks bubble'],
   ['bubbleTag', 'bubblePaper', 'nama proyek di bubble'],

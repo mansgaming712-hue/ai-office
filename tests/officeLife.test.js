@@ -10,7 +10,7 @@ import {
 } from '../src/office/characters.js';
 import { CHAT_LINES, Office, TUNING } from '../src/office/engine.js';
 import {
-  CELL, DECOR, DOOR, H, MEETING, PANTRY, W, WALL_H, WALL_ITEMS, WINDOWS, ZONES, obstacles, rosterSeats, zoneList,
+  CEO_ROOM, CELL, DECOR, DOOR, H, MEETING, PANTRY, W, WALL_H, WALL_ITEMS, WINDOWS, ZONES, obstacles, rosterSeats, zoneList,
 } from '../src/office/layout.js';
 import { PALETTES } from '../src/office/palette.js';
 import { createGrid, findPath } from '../src/office/pathfinding.js';
@@ -170,7 +170,8 @@ describe('layout kantor Jakarta: pantry, ruang rapat, jendela', () => {
 
   it('jendela, papan tulis, jam, poster, dan AC berada di dinding atas', () => {
     for (const w of WINDOWS) expect(w.y + w.h).toBeLessThanOrEqual(WALL_H);
-    expect(paneRects()).toHaveLength(6);
+    expect(WINDOWS).toHaveLength(3); // dua jendela kantor + jendela ruang CEO
+    expect(paneRects()).toHaveLength(9);
     for (const p of paneRects()) expect(WINDOWS.some((w) => p.x >= w.x && p.x + p.w <= w.x + w.w)).toBe(true);
     for (const r of [WALL_ITEMS.ac, WALL_ITEMS.board, ...WALL_ITEMS.posters, WALL_ITEMS.meetBoard]) {
       expect(r.y + r.h).toBeLessThanOrEqual(WALL_H);
@@ -352,10 +353,13 @@ describe('engine: kirim hasil, CEO, dan hujan', () => {
 
   it('CEO: memberi perintah (pose beri), lalu bereaksi saat laporan manajer tiba', () => {
     const o = new Office();
-    expect(o.ceo).toMatchObject({ x: DOOR.enter.x, y: DOOR.enter.y });
+    expect(o.ceo).toMatchObject({ x: CEO_ROOM.seat.x, y: CEO_ROOM.seat.y, state: 'sitting' });
     o.handleEvent(ev('assign', 'ceo', 'manager', 'Luncurkan'));
-    expect(o.ceo.giveUntil).toBeGreaterThan(o.time);
-    run(o, 3);
+    let gave = false;
+    run(o, 6, (x) => {
+      if (x.ceo.giveUntil > x.time) gave = true; // pose beri saat CEO menyerahkan amplop
+    });
+    expect(gave).toBe(true);
     expect(o.manager.bubble?.kind).toBe('command');
     o.handleEvent(ev('report', 'manager', 'ceo', 'Beres'));
     run(o, 3);
@@ -478,7 +482,8 @@ describe('renderer: latar dan label di-cache', () => {
     const texts = labels.log.filter((e) => e.op === 'text').map((e) => e.text);
     for (const n of AGENT_NAMES) expect(texts, n).toContain(deskLabel(n));
     expect(texts).toContain(`${characterName(MANAGER_ID)} · ${t('office.label.manager')}`);
-    expect(texts).toContain(characterName(CEO_ID));
+    expect(texts).toContain(`${characterName(CEO_ID)} · ${t('office.label.ceo')}`);
+    expect(texts.filter((x) => x === t('office.label.ceo'))).toHaveLength(2); // plakat kaca + papan nama meja
     expect(texts).toContain(t('office.label.pantry'));
     expect(texts).toContain(t('office.label.meeting'));
     expect(texts.some((x) => t('office.poster.1').startsWith(x))).toBe(true);

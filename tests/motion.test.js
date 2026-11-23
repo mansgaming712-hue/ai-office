@@ -294,16 +294,17 @@ describe('ukuran kanvas: skala tajam di layar besar, tidak berubah di layar keci
   });
 
   it('layar besar: dibulatkan ke kelipatan bulat piksel bila kehilangan ruangnya kecil', () => {
-    const r = fitCanvas({ availW: 1450, availH: 2000, dpr: 1 });
-    expect(r).toMatchObject({ cssW: 1440, cssH: H * 3, scale: 3, snapped: true });
-    const hi = fitCanvas({ availW: 1000, availH: 2000, dpr: 2 });
-    expect(hi).toMatchObject({ cssW: 960, scale: 4, snapped: true }); // 4 piksel perangkat per piksel logis
+    const r = fitCanvas({ availW: W * 3 + 10, availH: 4000, dpr: 1 });
+    expect(r).toMatchObject({ cssW: W * 3, cssH: H * 3, scale: 3, snapped: true });
+    const hi = fitCanvas({ availW: Math.round(W * 2.083), availH: 4000, dpr: 2 });
+    expect(hi).toMatchObject({ cssW: (W * 4) / 2, scale: 4, snapped: true }); // 4 piksel perangkat per piksel logis
   });
 
   it('layar besar tapi pembulatan akan memangkas banyak: pakai skala pecahan penuh', () => {
-    const r = fitCanvas({ availW: 1294, availH: 1600, dpr: 1 }); // 2,7x: dibulatkan ke 2x berarti -26%
+    const availW = Math.round(W * 2.7);
+    const r = fitCanvas({ availW, availH: 4000, dpr: 1 }); // 2,7x: dibulatkan ke 2x berarti -26%
     expect(r.snapped).toBe(false);
-    expect(r.cssW).toBe(1294);
+    expect(r.cssW).toBe(availW);
   });
 
   it('hasil tidak pernah melebihi ruang yang tersedia, untuk banyak ukuran layar dan DPR', () => {
