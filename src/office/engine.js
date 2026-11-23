@@ -49,6 +49,7 @@ export const TUNING = {
   ceoRise: 0.35, // detik CEO berdiri dari kursi sebelum berjalan
   ceoWalk: 70, // CEO berjalan santai (kopi, lihat jendela, kembali)
   ceoRush: 160, // CEO mengantar tugas
+  commandFlight: 1.235, // detik amplop perintah terbang ke manajer (tetap, dari mana pun CEO berada; = clamp(210 / 170) dari pintu di b6f8e22)
   ceoGive: 0.9, // detik CEO berdiri menyerahkan amplop
   ceoIdleFirst: [9, 18], // jeda sebelum kebiasaan idle CEO pertama (detik, aliran RNG khusus CEO)
   ceoIdleEvery: [22, 45], // jeda antar kebiasaan idle CEO
@@ -133,7 +134,6 @@ export class Office {
       speed: 0,
       walkDist: 0,
       timer: 0,
-      errands: [], // perintah CEO yang menunggu diantar
       idleIn: null,
       bubble: null,
       giveUntil: -Infinity,
@@ -321,7 +321,7 @@ export class Office {
         if (from !== CEO_ID && from !== MANAGER_ID && this.workers.has(from)) {
           this.#workerEvent(this.workers.get(from), { ...e, type: 'report' });
         } else {
-          this.ceo.errands.push({ message, project });
+          this.#ceoCommand(message, project);
         }
         return;
       }
@@ -424,14 +424,14 @@ export class Office {
     });
   }
 
-  #envelope(from, to, kind, onArrive) {
+  #envelope(from, to, kind, onArrive, dur = null) {
     const dist = Math.hypot(to.x - from.x, to.y - from.y);
     this.envelopes.push({
       from: { ...from },
       to: { ...to },
       kind,
       t: 0,
-      dur: clamp(dist / 170, 0.8, 1.7),
+      dur: dur ?? clamp(dist / 170, 0.8, 1.7),
       arc: 14 + dist * 0.12,
       x: from.x,
       y: from.y,
@@ -674,16 +674,26 @@ export class Office {
     c.speed = 0;
   }
 
-  /** Antar semua perintah yang menunggu: amplop terbang dari tangan CEO ke baki manajer. */
-  #ceoDeliver() {
+  /**
+   * Perintah CEO -> manajer: reaksi di t=0 (amplop terbang dari posisi CEO saat itu, bubble saat amplop tiba),
+   * persis seperti sebelum animasi CEO. Animasi CEO hanya kosmetik paralel: tidak menahan apa pun dan tidak mengantre;
+   * kalau CEO sedang kopi/jendela/pulang, animasinya dipotong dan dimulai ulang dari posisi saat ini.
+   */
+  #ceoCommand(message, project) {
     const c = this.ceo;
-    const jobs = c.errands;
-    c.errands = [];
     c.giveUntil = this.time + TUNING.ceoGive;
-    for (const { message, project } of jobs) {
-      this.#envelope({ x: c.x, y: c.y - 14 }, { x: MANAGER_SPOT.seat.x, y: MANAGER_SPOT.seat.y - 12 }, 'command', () => {
-        this.manager.bubble = this.#bubble(message || t('office.bubble.newCommand'), 'command', 4, project);
-      });
+    this.#envelope({ x: c.x, y: c.y - 14 }, { x: MANAGER_SPOT.seat.x, y: MANAGER_SPOT.seat.y - 12 }, 'command', () => {
+      this.manager.bubble = this.#bubble(message || t('office.bubble.newCommand'), 'command', 4, project);
+    }, TUNING.commandFlight);
+    if (this.reducedMotion) return;
+    if (c.state === 'sitting') {
+      c.state = 'rising';
+      c.goal = 'errand';
+      c.timer = TUNING.ceoRise;
+    } else if (c.state !== 'rising' && c.goal !== 'errand') {
+      this.#ceoGo('errand'); // potong kopi/jendela/pulang: langsung ke manajer dari posisi sekarang
+    } else if (c.state === 'doing') {
+      c.timer = TUNING.ceoGive; // sudah di depan manajer: cukup perpanjang pose menyerahkan
     }
   }
 
@@ -710,22 +720,11 @@ export class Office {
   #updateCeo(dt) {
     const c = this.ceo;
     if (this.reducedMotion) {
-      // tanpa jalan-jalan: perintah langsung diantar dari meja (amplop terbang dan teks tetap jelas)
-      if (c.state !== 'sitting') this.#ceoSnapHome();
-      if (c.errands.length) this.#ceoDeliver();
+      if (c.state !== 'sitting') this.#ceoSnapHome(); // tanpa jalan-jalan: CEO tetap di mejanya
       return;
-    }
-    if (c.errands.length && c.state !== 'sitting' && c.state !== 'rising' && c.goal !== 'errand') {
-      this.#ceoGo('errand'); // ada tugas masuk: batalkan kopi/jendela/kembali, langsung mengantar
     }
     switch (c.state) {
       case 'sitting': {
-        if (c.errands.length) {
-          c.state = 'rising';
-          c.goal = 'errand';
-          c.timer = TUNING.ceoRise;
-          break;
-        }
         c.idleIn ??= this.#crange(TUNING.ceoIdleFirst);
         c.idleIn -= dt;
         if (c.idleIn > 0) break;
@@ -769,18 +768,12 @@ export class Office {
         }
         c.state = 'doing';
         c.facing = 'up';
-        if (c.goal === 'errand') {
-          c.timer = TUNING.ceoGive;
-          this.#ceoDeliver();
-        } else c.timer = this.#crange(c.goal === 'coffee' ? TUNING.ceoCoffee : TUNING.ceoWindow);
+        if (c.goal === 'errand') c.timer = TUNING.ceoGive; // kosmetik: amplop sudah terbang sejak event masuk
+        else c.timer = this.#crange(c.goal === 'coffee' ? TUNING.ceoCoffee : TUNING.ceoWindow);
         break;
       }
       case 'doing':
         c.timer -= dt;
-        if (c.goal === 'errand' && c.errands.length) {
-          this.#ceoDeliver();
-          c.timer = TUNING.ceoGive;
-        }
         if (c.timer <= 0) this.#ceoGo('home');
         break;
       default:
@@ -915,8 +908,6 @@ export class Office {
   isIdle() {
     return (
       this.manager.state === 'sitting' &&
-      !this.ceo.errands.length &&
-      this.ceo.goal !== 'errand' &&
       !this.queue.length &&
       !this.envelopes.length &&
       !this.scheduled.length

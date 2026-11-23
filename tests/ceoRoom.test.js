@@ -170,14 +170,15 @@ describe('perilaku CEO', () => {
     expect(o.ceo).toMatchObject({ x: CEO_ROOM.seat.x, y: CEO_ROOM.seat.y, state: 'sitting', facing: 'down' });
   });
 
-  it('tugas masuk: berdiri, berjalan ke depan meja manajer, serahkan amplop, lalu kembali ke meja', () => {
+  it('tugas masuk: amplop terbang t=0; CEO berdiri, berjalan ke depan meja manajer (kosmetik), lalu kembali ke meja', () => {
     const o = new Office();
     o.handleEvent(ev('assign', 'ceo', 'manager', 'Luncurkan'));
+    expect(o.envelopes.some((e) => e.kind === 'command')).toBe(true); // tidak menunggu CEO
     const seen = [];
     let handed = null;
     run(o, 20, (x) => {
       if (seen.at(-1) !== x.ceo.state) seen.push(x.ceo.state);
-      if (!handed && x.envelopes.some((e) => e.kind === 'command')) handed = { ...x.ceo };
+      if (!handed && x.ceo.state === 'doing') handed = { ...x.ceo };
     });
     expect(seen).toEqual(['rising', 'walking', 'doing', 'walking', 'sitting']);
     expect(dist(handed, CEO_VISIT.manager)).toBeLessThan(2);
@@ -214,11 +215,12 @@ describe('perilaku CEO', () => {
     expect(o.manager.bubble?.text === 'Prioritas baru' || o.stats.envelopesArrived > 0).toBe(true);
   });
 
-  it('dua perintah beruntun: keduanya diantar, CEO kembali sekali', () => {
+  it('dua perintah beruntun: kedua amplop terbang t=0, animasi CEO tidak diantre (satu perjalanan)', () => {
     const o = new Office();
     o.handleEvent(ev('assign', 'ceo', 'manager', 'Satu'));
     o.handleEvent(ev('assign', 'ceo', 'manager', 'Dua'));
-    expect(o.ceo.errands).toHaveLength(2);
+    expect(o.envelopes.filter((e) => e.kind === 'command')).toHaveLength(2);
+    expect(o.ceo.errands).toBeUndefined(); // tidak ada antrean errand lagi
     const commands = new Set();
     let walks = 0;
     let prev = '';
@@ -229,7 +231,6 @@ describe('perilaku CEO', () => {
     });
     expect(commands.size).toBe(2);
     expect(walks).toBe(1);
-    expect(o.ceo.errands).toHaveLength(0);
     expect(o.ceo.state).toBe('sitting');
   });
 
@@ -270,7 +271,7 @@ describe('perilaku CEO', () => {
     expect(spots.coffee.facing).toBe('up');
   });
 
-  it('tugas masuk saat CEO sedang minum kopi: kopi dibatalkan, CEO langsung mengantar tugas', () => {
+  it('tugas masuk saat CEO sedang minum kopi: amplop t=0, kopi dipotong (tanpa antre), CEO ke manajer dari posisinya', () => {
     const o = new Office({ seed: 7 });
     let coffeeAt = null;
     run(o, 240, (x) => {
@@ -281,11 +282,12 @@ describe('perilaku CEO', () => {
     run(o2, coffeeAt + 0.5);
     expect(o2.ceo.state).toBe('doing');
     o2.handleEvent(ev('assign', 'ceo', 'manager', 'Mendadak'));
+    expect(o2.envelopes.some((e) => e.kind === 'command')).toBe(true);
     run(o2, 0.1);
     expect(o2.ceo.goal).toBe('errand');
     expect(o2.ceo.state).toBe('walking');
     run(o2, 15);
-    expect(o2.manager.bubble?.text === 'Mendadak' || o2.stats.envelopesArrived > 0).toBe(true);
+    expect(o2.stats.envelopesArrived).toBeGreaterThan(0);
     expect(o2.ceo.state).not.toBe('walking');
   });
 

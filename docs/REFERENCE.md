@@ -678,9 +678,10 @@ the glass), a bookshelf, a coffee table with a coffee machine, a plant, and a wi
 theme palette, so it follows the theme and the day and night cycle (lamp light and tint) with no new theme field. Behaviour (display
 only; it never changes a status, the queue, or an event):
 
-- A task from the CEO (`assign` from `ceo` to `manager`): the CEO stands up, walks out of the door to the front of the manager desk
-  (or to the front of the meeting room when the manager is away), hands over the envelope, and walks back. The manager reacts when the
-  envelope arrives, about three seconds after the event.
+- A task from the CEO (`assign` from `ceo` to `manager`): the envelope flies at once (t=0) from wherever the CEO is to the manager,
+  and the manager reacts with no delay (the bubble appears about 1.24 seconds later, same as before the CEO room). The CEO animation is cosmetic
+  and parallel: the CEO stands up, walks to the front of the manager desk (or the meeting room when the manager is away), and walks
+  back without holding anything up. A new event cuts any running animation (coffee, window, walking home) and is never queued.
 - A report to the CEO (`report`/`blocked` from `manager` to `ceo`): the envelope lands on the CEO desk and the CEO reacts there.
 - Idle: now and then the CEO stands up to drink coffee at the coffee table or to look out of the window, then sits down again.
   This uses its own seeded random stream, so it never shifts the pantry trips or the personality lines of the workers.

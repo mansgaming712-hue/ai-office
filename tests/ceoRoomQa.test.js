@@ -86,7 +86,6 @@ describe('QA perilaku CEO: kondisi tepi', () => {
     }
     run(o, 90, collect(seen));
     expect(seen.size).toBe(30);
-    expect(o.ceo.errands).toHaveLength(0);
     expect(o.ceo.state).toBe('sitting');
     expect(o.isIdle()).toBe(true);
   });
@@ -99,20 +98,18 @@ describe('QA perilaku CEO: kondisi tepi', () => {
       const seen = new Set();
       run(o, 40, collect(seen));
       expect(seen.size, `offset ${phase}`).toBe(1);
-      expect(o.ceo.errands).toHaveLength(0);
       run(o, 60);
       expect(o.isIdle()).toBe(true);
     }
   });
 
-  it('tugas kedua disisipkan tiap 0,25 dtk selama siklus penuh: tidak pernah menyisakan errand', () => {
+  it('tugas kedua disisipkan tiap 0,25 dtk selama siklus penuh: CEO selalu pulang, kantor idle', () => {
     for (let off = 0; off < 14; off += 0.25) {
       const o = new Office({ seed: 5 });
       o.handleEvent(ev('assign', 'ceo', 'manager', 'A'));
       run(o, off);
       o.handleEvent(ev('assign', 'ceo', 'manager', 'B'));
       run(o, 60);
-      expect(o.ceo.errands, `off ${off}`).toHaveLength(0);
       expect(o.ceo.state, `off ${off}`).toBe('sitting');
       expect(o.isIdle()).toBe(true);
     }
@@ -130,14 +127,13 @@ describe('QA perilaku CEO: kondisi tepi', () => {
     expect(o.ceo).toMatchObject({ state: 'sitting', x: CEO_ROOM.seat.x, y: CEO_ROOM.seat.y });
   });
 
-  it('reset() di tengah perjalanan: CEO duduk lagi, errand dan jalur kosong, kantor idle', () => {
+  it('reset() di tengah perjalanan: CEO duduk lagi, jalur kosong, kantor idle', () => {
     for (const at of [0.2, 1, 2.5, 4, 6]) {
       const o = new Office({ seed: 4 });
       o.handleEvent(ev('assign', 'ceo', 'manager', 'x'));
       run(o, at);
       o.reset();
       expect(o.ceo).toMatchObject({ state: 'sitting', x: CEO_ROOM.seat.x, y: CEO_ROOM.seat.y });
-      expect(o.ceo.errands).toHaveLength(0);
       expect(o.ceo.path).toHaveLength(0);
       expect(o.isIdle()).toBe(true);
       run(o, 30);
@@ -152,13 +148,11 @@ describe('QA perilaku CEO: kondisi tepi', () => {
     o.setReducedMotion(true);
     run(o, 10);
     expect(o.ceo).toMatchObject({ state: 'sitting', x: CEO_ROOM.seat.x, y: CEO_ROOM.seat.y });
-    expect(o.ceo.errands).toHaveLength(0);
     o.setReducedMotion(false);
     o.handleEvent(ev('assign', 'ceo', 'manager', 'y'));
     const seen = new Set();
     run(o, 30, collect(seen));
     expect(seen.size).toBe(1);
-    expect(o.ceo.errands).toHaveLength(0);
     expect(o.isIdle()).toBe(true);
   });
 
@@ -196,7 +190,7 @@ describe('QA perilaku CEO: kondisi tepi', () => {
 });
 
 describe('QA kontras teks ruang CEO (semua tema x fase)', () => {
-  it('plakat dan papan nama CEO (signInk/signPaper) dan label karpet CEO (onRug/rugA, rugB, juga di bawah cahaya lampu) >= 4,5:1 setelah tint fase', () => {
+  it('plakat dan papan nama CEO (signInk/signPaper) dan label karpet CEO (onRug/rugA, rugB, juga di bawah tiga lapis cahaya lampu) >= 4,5:1 setelah tint fase', () => {
     for (const theme of registry.themes) {
       for (const phase of PHASES) {
         const look = PHASE_LOOK[phase];
@@ -204,7 +198,7 @@ describe('QA kontras teks ruang CEO (semua tema x fase)', () => {
         const tint = (c) => (look.tint.alpha > 0 ? blend(look.tint.color, c, look.tint.alpha) : c);
         const lit = (c) => {
           let r = c;
-          for (const al of [0.035, 0.04]) r = blend(LAMP_COLOR, r, al * look.lamps); // label di karpet kena dua lapis kolam cahaya
+          for (const al of [0.035, 0.04, 0.05]) r = blend(LAMP_COLOR, r, al * look.lamps); // skenario terburuk: tiga lapis kolam cahaya (scene.js) menutupi label
           return r;
         };
         for (const [fg, bg, why] of [['signInk', 'signPaper', 'plakat CEO'], ['onRug', 'rugA', 'label CEO di karpet'], ['onRug', 'rugB', 'label CEO di karpet']]) {

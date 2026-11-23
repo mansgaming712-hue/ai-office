@@ -676,8 +676,10 @@ Ruang CEO adalah ruangan tertutup berdinding kaca dengan satu pintu. CEO duduk d
 kaca), rak buku, meja kopi dengan mesin kopi, tanaman, dan jendela di dinding belakang. Warnanya diturunkan dari palet tema, jadi ikut tema dan
 siklus siang-malam (cahaya lampu dan tint) tanpa field tema baru. Perilaku (hanya tampilan; tidak mengubah status, antrean, atau event):
 
-- Tugas dari CEO (`assign` dari `ceo` ke `manager`): CEO berdiri, berjalan keluar pintu ke depan meja manajer (atau ke depan ruang rapat bila
-  manajer sedang pergi), menyerahkan amplop, lalu kembali. Manajer bereaksi saat amplop tiba, sekitar tiga detik setelah event.
+- Tugas dari CEO (`assign` dari `ceo` ke `manager`): amplop langsung terbang (t=0) dari posisi CEO saat itu ke manajer
+  dan manajer bereaksi tanpa jeda (bubble sekitar 1,24 detik kemudian, sama seperti sebelum ruang CEO). Animasi CEO hanya kosmetik paralel: ia
+  berdiri, berjalan ke depan meja manajer (atau ruang rapat bila manajer sedang pergi), lalu kembali, tanpa menahan apa pun. Event baru
+  memotong animasi yang sedang jalan (kopi/jendela/pulang) dan tidak pernah diantre.
 - Laporan ke CEO (`report`/`blocked` dari `manager` ke `ceo`): amplop mendarat di meja CEO dan CEO bereaksi di sana.
 - Idle: sesekali CEO berdiri untuk minum kopi di meja kopi atau melihat jendela, lalu duduk lagi. Ini memakai aliran acak berbiji
   tersendiri, jadi tidak menggeser perjalanan pantry atau frasa kepribadian para pekerja.
